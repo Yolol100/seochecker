@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "owner_skill": "seo",
+  "project_id": "project-seo",
+  "repository": "Yolol100/seochecker",
+  "evidence_role": "controlled_runtime_technical_seo",
+  "requires_account": false,
+  "requires_api_key": false,
+  "requires_mcp": false,
+  "tools": [
+    {"id":"core-indexability","version":"repo","trigger_when":"every audit","outputs":["reports/basic-seo.json"]},
+    {"id":"siteone","version":"2.5.1","trigger_when":"every audit","outputs":["reports/siteone.json","reports/siteone.html"]},
+    {"id":"lighthouse-ci","version":"0.15.1","trigger_when":"every audit","outputs":[".lighthouseci/"]},
+    {"id":"nu-html-checker","version":"asset-515207969","sha256":"c70279e260e5f4f9e95b3890ef6c9548f90ebdaec2a75219ec41694ab6241e34","trigger_when":"every audit","outputs":["reports/w3c-nu.json"]}
+  ],
+  "usage_assertions": [
+    {"tool":"core-indexability","path":".github/workflows/seo-audit.yml","contains":"seo_basic_check.py"},
+    {"tool":"siteone","path":".github/workflows/seo-audit.yml","contains":"siteone-crawler"},
+    {"tool":"lighthouse-ci","path":".github/workflows/seo-audit.yml","contains":"@lhci/cli@0.15.1"},
+    {"tool":"nu-html-checker","path":".github/workflows/seo-audit.yml","contains":"VNU_ASSET_ID"}
+  ],
+  "boundaries": ["Ahrefs/GSC/GA4 stay external evidence sources", "tool findings are diagnostics; SEO owns interpretation"]
+}
