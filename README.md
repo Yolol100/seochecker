@@ -6,7 +6,7 @@ Technische SEO-audittool voor publieke websites. De workflow combineert eigen in
 
 Deze repository heeft bewust één hoofdtaak: **actuele technische evidence van een publieke eigen URL/site leveren**. Hij vervangt Ahrefs niet en roept Ahrefs niet rechtstreeks aan.
 
-- **seochecker:** actuele technische staat, indexeerbaarheids- en crawlchecks, markup/labvalidatie en technische regressie.
+- **seochecker:** actuele technische staat, indexeerbaarheids- en crawlchecks, markup/labvalidatie en technische regressie via dezelfde `technical-crawl`-capability vóór en na een wijziging.
 - **Ahrefs:** zoekvraag-, concurrent-, ranking-, backlink-, Rank Tracker- en Brand Radar-context.
 - **Beide:** alleen wanneer een SEO-besluit zowel actuele technische waarheid als markt-/autoriteitscontext nodig heeft, bijvoorbeeld migratie, pruning/cleanup, redirectprioriteit, broken-backlink recovery of een volledige technische + markt/autoriteitsaudit.
 - **Search Console:** blijft de hogere bewijslaag voor Google's indexstatus en eigen Google Search-prestaties.
