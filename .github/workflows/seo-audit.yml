@@ -2,6 +2,10 @@ name: SEO Audit
 
 on:
   pull_request:
+  push:
+    branches: [main]
+    paths:
+      - 'requests/audit.json'
   workflow_dispatch:
     inputs:
       url:
@@ -23,12 +27,64 @@ jobs:
       - name: Compile Python
         run: python3 -m py_compile scripts/*.py tests/*.py
 
+  resolve-request:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.resolve.outputs.run }}
+      request_id: ${{ steps.resolve.outputs.request_id }}
+      target_url: ${{ steps.resolve.outputs.target_url }}
+    steps:
+      - name: Checkout request
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Resolve source-bound request
+        id: resolve
+        shell: bash
+        env:
+          DISPATCH_URL: ${{ inputs.url }}
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const out = process.env.GITHUB_OUTPUT;
+          const write = (k, v) => fs.appendFileSync(out, `${k}=${String(v)}\n`);
+          const safeText = (v) => typeof v === 'string' && v.trim().length > 0 && !/[\r\n]/.test(v);
+          const safeId = (v) => typeof v === 'string' && /^[A-Za-z0-9._-]{3,80}$/.test(v);
+          let run = false;
+          let requestId = 'none';
+          let targetUrl = '';
+          if (process.env.GITHUB_EVENT_NAME === 'workflow_dispatch') {
+            targetUrl = process.env.DISPATCH_URL || '';
+            new URL(targetUrl);
+            run = true;
+            requestId = `dispatch-${process.env.GITHUB_RUN_ID}`;
+          } else {
+            const req = JSON.parse(fs.readFileSync('requests/audit.json', 'utf8'));
+            if (req.enabled === true) {
+              if (!safeId(req.request_id)) throw new Error('invalid request_id');
+              if (req.owner !== 'seo' || req.project_id !== 'project-seo') throw new Error('request owner/project mismatch');
+              for (const key of ['for', 'task', 'why', 'trigger_when', 'do_not_trigger_when', 'requested_by']) {
+                if (!safeText(req[key])) throw new Error(`missing or unsafe ${key}`);
+              }
+              if (!req.source_context || req.source_context.project_id !== 'project-seo' || !safeText(req.source_context.source_set_version)) {
+                throw new Error('invalid source_context');
+              }
+              targetUrl = req.url || '';
+              new URL(targetUrl);
+              run = true;
+              requestId = req.request_id;
+            }
+          }
+          write('run', run ? 'true' : 'false');
+          write('request_id', requestId);
+          write('target_url', targetUrl);
+          NODE
+
   audit:
-    if: github.event_name == 'workflow_dispatch'
-    needs: self-test
+    if: needs.resolve-request.outputs.run == 'true'
+    needs: [self-test, resolve-request]
     runs-on: ubuntu-latest
     env:
-      TARGET_URL: ${{ inputs.url }}
+      TARGET_URL: ${{ needs.resolve-request.outputs.target_url }}
       SITEONE_VERSION: "2.5.1"
       SITEONE_SHA256: "09278d958d4a087fa46093805cd33b085b96618001dd31d45c448ad724c9024e"
     steps:
@@ -90,6 +146,7 @@ jobs:
           {
             echo "## SEO Audit"
             echo ""
+            echo "Request: ${{ needs.resolve-request.outputs.request_id }}"
             echo "Target: $TARGET_URL"
             echo ""
             echo "| Controle | Status |"
