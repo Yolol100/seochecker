@@ -1,5 +1,5 @@
 {
-  "contract_version": "1.0.0",
+  "contract_version": "1.0.1",
   "updated": "2026-08-15",
   "repository": "Yolol100/seochecker",
   "role": "current-owned-site-technical-evidence",
@@ -7,7 +7,8 @@
   "workflow_name": "SEO Audit",
   "input": {"url": "explicit public http/https URL"},
   "output_artifact": "seo-audit-report",
-  "capabilities": ["technical-crawl", "technical-regression-evidence"],
+  "capabilities": ["technical-crawl"],
+  "technical_regression_rule": "Use the same technical-crawl route before and after a technical change; regression evidence is a use case of technical-crawl, not a separate capability.",
   "not_capabilities": ["keyword-research", "competitor-research", "backlink-analysis", "ranking-estimates", "rank-tracker", "brand-radar", "google-index-status", "owned-search-performance"],
   "ahrefs_role": "external-market-visibility-link-intelligence",
   "pair_with_ahrefs_when": ["migration-pruning-cleanup-or-redirect-priority-needs-market-or-link-value", "broken-backlink-recovery", "selected-owned-page-readiness-after-keyword-or-competitor-research", "complete-technical-plus-market-authority-audit"],
