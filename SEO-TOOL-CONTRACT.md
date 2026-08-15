@@ -17,7 +17,7 @@ Use for:
 - SiteOne technical crawl
 - Lighthouse CI lab evidence
 - W3C Nu HTML validation
-- technical pre/post-change regression evidence
+- technical pre/post-change regression evidence through the same `technical-crawl` capability
 
 Do not use as a source for keyword demand, competitor opportunity, backlink authority, ranking estimates, Rank Tracker, Brand Radar or Google's indexed/performance state.
 
@@ -55,6 +55,10 @@ Ahrefs metrics are third-party diagnostic data. An Ahrefs crawl does not replace
 3. Keyword/backlink/competitor trigger: use Ahrefs first, then run seochecker only on owned URLs selected for action.
 4. Migration/pruning/cleanup: collect both evidence classes before redirect/noindex/delete/consolidate decisions.
 5. Return one normalized SEO decision, not two tool dumps.
+
+## Capability rule
+
+`technical-crawl` is the only technical crawl capability exposed by this repository. Before/after regression evidence is a use case of `technical-crawl`, not a separate capability.
 
 ## Evidence precedence
 
