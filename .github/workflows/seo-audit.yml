@@ -1,0 +1,127 @@
+name: SEO Audit
+
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "Publieke URL die technisch gecontroleerd moet worden"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  self-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+      - name: Test checker
+        run: python3 -m unittest discover -s tests -v
+      - name: Compile Python
+        run: python3 -m py_compile scripts/*.py tests/*.py
+
+  audit:
+    if: github.event_name == 'workflow_dispatch'
+    needs: self-test
+    runs-on: ubuntu-latest
+    env:
+      TARGET_URL: ${{ inputs.url }}
+      SITEONE_VERSION: "2.5.1"
+      SITEONE_SHA256: "09278d958d4a087fa46093805cd33b085b96618001dd31d45c448ad724c9024e"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: Validate public target
+        run: python3 scripts/validate_target.py "$TARGET_URL"
+
+      - name: Prepare report directories
+        run: mkdir -p reports tools/siteone
+
+      - name: Core SEO and indexability check
+        id: basic
+        continue-on-error: true
+        run: python3 scripts/seo_basic_check.py "$TARGET_URL" --output reports/basic-seo.json --fail-on-indexability
+
+      - name: Install pinned SiteOne Crawler
+        run: |
+          curl -fsSL "https://github.com/janreges/siteone-crawler/releases/download/v${SITEONE_VERSION}/siteone-crawler-v${SITEONE_VERSION}-linux-x64.tar.gz" -o /tmp/siteone.tar.gz
+          echo "${SITEONE_SHA256}  /tmp/siteone.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/siteone.tar.gz -C tools/siteone
+          SITEONE_BIN="$(find tools/siteone -type f -name siteone-crawler -perm -111 | head -n 1)"
+          test -n "$SITEONE_BIN"
+          echo "SITEONE_BIN=$SITEONE_BIN" >> "$GITHUB_ENV"
+
+      - name: SiteOne technical crawl
+        id: siteone
+        continue-on-error: true
+        run: |
+          "$SITEONE_BIN" \
+            --url="$TARGET_URL" \
+            --max-reqs-per-sec=5 \
+            --output-html-report=reports/siteone.html \
+            --output-json-file=reports/siteone.json \
+            --output-text-file=reports/siteone.txt
+
+      - name: Install Lighthouse CI
+        run: npm install --global @lhci/cli@0.15.1
+
+      - name: Lighthouse CI collection
+        id: lighthouse
+        continue-on-error: true
+        run: lhci collect --url="$TARGET_URL" --numberOfRuns=1
+
+      - name: W3C Nu HTML validation
+        id: vnu
+        continue-on-error: true
+        run: |
+          curl -fsS -G \
+            --data-urlencode "doc=$TARGET_URL" \
+            --data-urlencode "out=json" \
+            "https://validator.w3.org/nu/" \
+            -o reports/w3c-nu.json
+
+      - name: Write audit summary
+        if: always()
+        run: |
+          {
+            echo "## SEO Audit"
+            echo ""
+            echo "Target: $TARGET_URL"
+            echo ""
+            echo "| Controle | Status |"
+            echo "|---|---|"
+            echo "| Indexability/basic SEO | ${{ steps.basic.outcome }} |"
+            echo "| SiteOne crawl | ${{ steps.siteone.outcome }} |"
+            echo "| Lighthouse CI | ${{ steps.lighthouse.outcome }} |"
+            echo "| W3C Nu HTML | ${{ steps.vnu.outcome }} |"
+            echo ""
+            echo "Toolmeldingen zijn diagnostiek. Prioriteer indexeerbaarheid, crawlbaarheid en live bewijs boven losse scores."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload audit reports
+        if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: seo-audit-report
+          path: |
+            reports/
+            .lighthouseci/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Enforce critical execution gate
+        if: always()
+        run: |
+          failed=0
+          [ "${{ steps.basic.outcome }}" = "success" ] || failed=1
+          [ "${{ steps.siteone.outcome }}" = "success" ] || failed=1
+          [ "${{ steps.lighthouse.outcome }}" = "success" ] || failed=1
+          [ "${{ steps.vnu.outcome }}" = "success" ] || failed=1
+          if [ "$failed" -ne 0 ]; then
+            echo "Een of meer kerncontroles zijn niet succesvol uitgevoerd. Bekijk de artefacts en logs."
+            exit 1
+          fi
