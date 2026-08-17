@@ -6,6 +6,11 @@ on:
     branches: [main]
     paths:
       - 'requests/audit.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'scripts/**'
+      - 'tests/**'
+      - '.github/workflows/seo-audit.yml'
   workflow_dispatch:
     inputs:
       url:
@@ -19,9 +24,19 @@ permissions:
 jobs:
   self-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked Node tooling
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Verify locked Lighthouse version
+        run: node -e "const p=require('./node_modules/@lhci/cli/package.json'); if(p.version!=='0.15.1') process.exit(1)"
       - name: Test checker
         run: python3 -m unittest discover -s tests -v
       - name: Compile Python
@@ -30,6 +45,7 @@ jobs:
   resolve-request:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       run: ${{ steps.resolve.outputs.run }}
       request_id: ${{ steps.resolve.outputs.request_id }}
@@ -83,6 +99,7 @@ jobs:
     if: needs.resolve-request.outputs.run == 'true'
     needs: [self-test, resolve-request]
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     env:
       TARGET_URL: ${{ needs.resolve-request.outputs.target_url }}
       SITEONE_VERSION: "2.5.1"
@@ -92,6 +109,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install locked Node tooling
+        run: npm ci --ignore-scripts --no-audit --no-fund
 
       - name: Validate public target
         run: python3 scripts/validate_target.py "$TARGET_URL"
@@ -124,13 +150,10 @@ jobs:
             --output-json-file=reports/siteone.json \
             --output-text-file=reports/siteone.txt
 
-      - name: Install Lighthouse CI
-        run: npm install --global @lhci/cli@0.15.1
-
       - name: Lighthouse CI collection
         id: lighthouse
         continue-on-error: true
-        run: lhci collect --url="$TARGET_URL" --numberOfRuns=1
+        run: npx --no-install lhci collect --url="$TARGET_URL" --numberOfRuns=1
 
       - name: Set up Java 17 for local Nu Checker
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
