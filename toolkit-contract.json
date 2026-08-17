@@ -16,7 +16,7 @@
   "usage_assertions": [
     {"tool":"core-indexability","path":".github/workflows/seo-audit.yml","contains":"seo_basic_check.py"},
     {"tool":"siteone","path":".github/workflows/seo-audit.yml","contains":"siteone-crawler"},
-    {"tool":"lighthouse-ci","path":".github/workflows/seo-audit.yml","contains":"@lhci/cli@0.15.1"},
+    {"tool":"lighthouse-ci","path":".github/workflows/seo-audit.yml","contains":"npx --no-install lhci collect"},
     {"tool":"nu-html-checker","path":".github/workflows/seo-audit.yml","contains":"VNU_ASSET_ID"}
   ],
   "boundaries": ["Ahrefs/GSC/GA4 stay external evidence sources", "tool findings are diagnostics; SEO owns interpretation"]

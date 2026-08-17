@@ -1,0 +1,12 @@
+{
+  "name": "webactueel-seochecker-ci",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Locked Node tooling for the Webactueel SEO audit workflow.",
+  "devDependencies": {
+    "@lhci/cli": "0.15.1"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
