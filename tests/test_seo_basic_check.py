@@ -1,11 +1,12 @@
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from seo_basic_check import analyze_html
+from seo_basic_check import PublicOnlyRedirectHandler, analyze_html, fetch
 
 
 class AnalyzeHtmlTests(unittest.TestCase):
@@ -70,6 +71,21 @@ class AnalyzeHtmlTests(unittest.TestCase):
         self.assertTrue(data["jsonld_errors"])
         self.assertIn("title ontbreekt", data["warnings"])
         self.assertIn("H1 ontbreekt", data["warnings"])
+
+
+class PublicTargetSafetyTests(unittest.TestCase):
+    def test_fetch_validates_initial_target_before_network_access(self):
+        with patch("seo_basic_check.validate_target", side_effect=ValueError("unsafe target")) as validate:
+            with self.assertRaisesRegex(ValueError, "unsafe target"):
+                fetch("http://127.0.0.1/")
+        validate.assert_called_once_with("http://127.0.0.1/")
+
+    def test_redirect_handler_validates_each_redirect_destination(self):
+        handler = PublicOnlyRedirectHandler()
+        with patch("seo_basic_check.validate_target", side_effect=ValueError("unsafe redirect")) as validate:
+            with self.assertRaisesRegex(ValueError, "unsafe redirect"):
+                handler.redirect_request(None, None, 302, "Found", {}, "http://169.254.169.254/latest/meta-data/")
+        validate.assert_called_once_with("http://169.254.169.254/latest/meta-data/")
 
 
 if __name__ == "__main__":
