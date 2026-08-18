@@ -3,3 +3,4 @@ tools/
 .lighthouseci/
 __pycache__/
 *.pyc
+requests/audit.json
