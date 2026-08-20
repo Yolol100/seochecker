@@ -1,0 +1,60 @@
+name: Temporary GSC Request
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'requests/gsc-request.json'
+      - '.github/workflows/gsc-request.yml'
+      - 'scripts/gsc_report.py'
+
+permissions:
+  contents: read
+
+jobs:
+  gsc-request:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GSC_CLIENT_ID: ${{ secrets.GSC_CLIENT_ID }}
+      GSC_CLIENT_SECRET: ${{ secrets.GSC_CLIENT_SECRET }}
+      GSC_REFRESH_TOKEN: ${{ secrets.GSC_REFRESH_TOKEN }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Read request
+        shell: bash
+        run: |
+          python3 - <<'PY' >> "$GITHUB_ENV"
+          import json
+          from pathlib import Path
+          req = json.loads(Path('requests/gsc-request.json').read_text())
+          for key in ['target_url','gsc_property','country_code','language_code','history_days']:
+              if key not in req:
+                  raise SystemExit(f'missing {key}')
+          print('TARGET_URL=' + req['target_url'])
+          print('GSC_PROPERTY=' + req['gsc_property'])
+          print('COUNTRY_CODE=' + req['country_code'])
+          print('LANGUAGE_CODE=' + req['language_code'])
+          print('HISTORY_DAYS=' + str(req['history_days']))
+          PY
+      - name: Pull Search Console data
+        run: |
+          python3 scripts/gsc_report.py \
+            --site-url "$GSC_PROPERTY" \
+            --inspection-url "$TARGET_URL" \
+            --country-code "$COUNTRY_CODE" \
+            --language-code "$LANGUAGE_CODE" \
+            --days "$HISTORY_DAYS" \
+            --output reports/gsc-report.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open('reports/gsc-report.json'))
+          if d.get('status') != 'ok':
+              raise SystemExit('GSC request failed: ' + json.dumps(d, ensure_ascii=False))
+          PY
+      - name: Upload GSC report
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: temporary-gsc-report
+          path: reports/gsc-report.json
+          retention-days: 1
