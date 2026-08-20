@@ -11,7 +11,7 @@ from ahrefs_report import is_suspicious_anchor, summarize_anchors, summarize_his
 class AhrefsSummaryTests(unittest.TestCase):
     def test_detects_spammy_anchor_language(self):
         self.assertTrue(is_suspicious_anchor("High Quality Dofollow Backlinks PBN Rank First Page Google"))
-        self.assertFalse(is_suspicious_anchor("Doctor Cura"))
+        self.assertFalse(is_suspicious_anchor("Example Brand"))
 
     def test_summarizes_history(self):
         summary = summarize_history([
@@ -25,7 +25,7 @@ class AhrefsSummaryTests(unittest.TestCase):
     def test_summarizes_samples(self):
         anchors = [
             {"anchor": "Buy Backlinks", "refdomains": 20, "dofollow_links": 5, "is_spam": True},
-            {"anchor": "Doctor Cura", "refdomains": 2, "dofollow_links": 2, "is_spam": False},
+            {"anchor": "Example Brand", "refdomains": 2, "dofollow_links": 2, "is_spam": False},
         ]
         self.assertEqual(summarize_anchors(anchors)["suspicious_refdomains_sum"], 20)
         refs = [{"domain": "a.test", "is_spam": True, "traffic_domain": 0}, {"domain": "b.test", "is_spam": False, "traffic_domain": 5}]
