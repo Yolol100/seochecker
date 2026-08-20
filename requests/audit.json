@@ -1,0 +1,17 @@
+{
+  "enabled": true,
+  "request_id": "doctorcura-deep-20260820",
+  "owner": "seo",
+  "project_id": "project-seo",
+  "for": "Doctorcura deep SEO diagnostic",
+  "task": "Run current technical SEO audit for https://doctorcura.com/",
+  "why": "Investigate ranking decline, indexability, language and technical signals",
+  "trigger_when": "Runtime branch is pushed for this requested analysis",
+  "do_not_trigger_when": "Request is disabled or target is not public",
+  "requested_by": "ChatGPT user request",
+  "url": "https://doctorcura.com/",
+  "source_context": {
+    "project_id": "project-seo",
+    "source_set_version": "2026-08-20"
+  }
+}
