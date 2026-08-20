@@ -2,6 +2,7 @@
 import argparse
 import json
 import os
+import time
 from datetime import date, timedelta
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -10,10 +11,40 @@ from urllib.request import Request, urlopen
 
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 SEARCH_ANALYTICS_BASE = "https://www.googleapis.com/webmasters/v3/sites/{site}/searchAnalytics/query"
+SITEMAPS_BASE = "https://www.googleapis.com/webmasters/v3/sites/{site}/sitemaps"
 URL_INSPECTION_URL = "https://searchconsole.googleapis.com/v1/urlInspection/index:inspect"
+RETRYABLE_HTTP_STATUS = {429, 500, 502, 503, 504}
+DEFAULT_ATTEMPTS = 3
+DEFAULT_RETRY_BASE_SECONDS = 1.0
+MAX_RETRY_AFTER_SECONDS = 30.0
 
 
-def request_json(url, method="GET", headers=None, payload=None, form=None, timeout=30):
+def _retry_delay(headers, attempt, base_seconds):
+    retry_after = None
+    if headers is not None:
+        try:
+            retry_after = headers.get("Retry-After")
+        except AttributeError:
+            retry_after = None
+    if retry_after:
+        try:
+            return min(max(float(retry_after), 0.0), MAX_RETRY_AFTER_SECONDS)
+        except (TypeError, ValueError):
+            pass
+    return base_seconds * (2 ** max(attempt - 1, 0))
+
+
+def request_json(
+    url,
+    method="GET",
+    headers=None,
+    payload=None,
+    form=None,
+    timeout=30,
+    attempts=DEFAULT_ATTEMPTS,
+    retry_base_seconds=DEFAULT_RETRY_BASE_SECONDS,
+    sleeper=None,
+):
     body = None
     hdrs = dict(headers or {})
     if payload is not None:
@@ -23,15 +54,27 @@ def request_json(url, method="GET", headers=None, payload=None, form=None, timeo
         body = urlencode(form).encode("utf-8")
         hdrs.setdefault("Content-Type", "application/x-www-form-urlencoded")
     req = Request(url, data=body, headers=hdrs, method=method)
-    try:
-        with urlopen(req, timeout=timeout) as response:
-            raw = response.read().decode("utf-8", errors="replace")
-            return json.loads(raw) if raw else {}
-    except HTTPError as exc:
-        raw = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"HTTP {exc.code}: {raw[:1000]}") from exc
-    except (URLError, TimeoutError, OSError) as exc:
-        raise RuntimeError(str(exc)) from exc
+    sleeper = sleeper or time.sleep
+    attempts = max(int(attempts), 1)
+
+    for attempt in range(1, attempts + 1):
+        try:
+            with urlopen(req, timeout=timeout) as response:
+                raw = response.read().decode("utf-8", errors="replace")
+                return json.loads(raw) if raw else {}
+        except HTTPError as exc:
+            raw = exc.read().decode("utf-8", errors="replace")
+            if exc.code in RETRYABLE_HTTP_STATUS and attempt < attempts:
+                sleeper(_retry_delay(exc.headers, attempt, retry_base_seconds))
+                continue
+            raise RuntimeError(f"HTTP {exc.code}: {raw[:1000]}") from exc
+        except (URLError, TimeoutError, OSError) as exc:
+            if attempt < attempts:
+                sleeper(_retry_delay(None, attempt, retry_base_seconds))
+                continue
+            raise RuntimeError(str(exc)) from exc
+
+    raise RuntimeError("API request failed after retries")
 
 
 def get_access_token(client_id, client_secret, refresh_token):
@@ -71,6 +114,14 @@ def search_analytics(token, site_url, start_date, end_date, dimensions, filters=
     )
 
 
+def list_sitemaps(token, site_url):
+    site = quote(site_url, safe="")
+    return request_json(
+        SITEMAPS_BASE.format(site=site),
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+
 def inspect_url(token, site_url, inspection_url, language_code):
     return request_json(
         URL_INSPECTION_URL,
@@ -82,6 +133,46 @@ def inspect_url(token, site_url, inspection_url, language_code):
             "languageCode": language_code,
         },
     )
+
+
+def _int_value(value):
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def summarize_sitemaps(response, limit=100):
+    rows = response.get("sitemap", []) if isinstance(response, dict) else []
+    compact = []
+    problematic = []
+    pending = []
+    for row in rows[:limit]:
+        item = {
+            "path": row.get("path"),
+            "last_submitted": row.get("lastSubmitted"),
+            "last_downloaded": row.get("lastDownloaded"),
+            "is_pending": bool(row.get("isPending")),
+            "is_sitemaps_index": bool(row.get("isSitemapsIndex")),
+            "type": row.get("type"),
+            "warnings": _int_value(row.get("warnings")),
+            "errors": _int_value(row.get("errors")),
+            "contents": row.get("contents") or [],
+        }
+        compact.append(item)
+        if item["is_pending"]:
+            pending.append(item)
+        if item["warnings"] > 0 or item["errors"] > 0:
+            problematic.append(item)
+    return {
+        "submitted_count": len(rows),
+        "returned_count": len(compact),
+        "pending_count": len(pending),
+        "with_errors_or_warnings_count": len(problematic),
+        "problematic": problematic[:20],
+        "entries": compact,
+        "truncated": len(rows) > limit,
+    }
 
 
 def rows_by_date(rows):
@@ -205,6 +296,7 @@ def build_report(site_url, inspection_url, country_code, language_code, days, cr
     country_daily = search_analytics(token, site_url, start.isoformat(), end.isoformat(), ["date"], country_filter).get("rows", [])
     top_queries = search_analytics(token, site_url, start.isoformat(), end.isoformat(), ["query"], country_filter, 250).get("rows", [])
     top_pages = search_analytics(token, site_url, start.isoformat(), end.isoformat(), ["page"], country_filter, 250).get("rows", [])
+    sitemaps = summarize_sitemaps(list_sitemaps(token, site_url))
     inspection = inspect_url(token, site_url, inspection_url, language_code) if inspection_url else {}
 
     return {
@@ -225,11 +317,14 @@ def build_report(site_url, inspection_url, country_code, language_code, days, cr
             "top_queries": compact_rows(top_queries, "query"),
             "top_pages": compact_rows(top_pages, "page"),
         },
+        "submitted_sitemaps": sitemaps,
         "url_inspection": inspection,
         "limitations": [
             "Search Analytics kan door interne limieten niet alle rijen teruggeven; toplijsten zijn geen volledige export.",
+            "De Sitemaps API toont wat in Search Console is ingediend of via een sitemap-index bekend is; dit bewijst niet dat alle sitemap-URL's zijn geindexeerd.",
             "URL Inspection API toont de versie/status in Google's index en voert geen live URL-test uit.",
             "Manual Actions en Security Issues moeten apart in Search Console worden gecontroleerd.",
+            "Tijdelijke HTTP 429/5xx- en netwerkfouten worden maximaal drie keer geprobeerd met oplopende wachttijd.",
         ],
     }
 
