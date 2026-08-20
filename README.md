@@ -1,69 +1,115 @@
 # SEO Checker
 
-Technische SEO-audittool voor publieke websites. De workflow combineert eigen indexeerbaarheidschecks met SiteOne Crawler, Lighthouse CI en de W3C Nu HTML-validator.
+Herbruikbare SEO-audittool voor publieke websites. De repository heeft twee workflows:
 
-## Rol binnen Project SEO
+- **SEO Audit** — volledig accountloos: technische live-checks, SiteOne crawl, Lighthouse CI en HTML-validatie.
+- **Full SEO Diagnostic** — dezelfde technische checks plus optionele Google Search Console- en Ahrefs-data, waarna alles in één evidence-first rapport wordt samengebracht.
 
-Deze repository heeft bewust één hoofdtaak: **actuele technische evidence van een publieke eigen URL/site leveren**. Hij vervangt Ahrefs niet en roept Ahrefs niet rechtstreeks aan.
-
-- **seochecker:** actuele technische staat, indexeerbaarheids- en crawlchecks, markup/labvalidatie en technische regressie via dezelfde `technical-crawl`-capability vóór en na een wijziging.
-- **Ahrefs:** zoekvraag-, concurrent-, ranking-, backlink-, Rank Tracker- en Brand Radar-context.
-- **Beide:** alleen wanneer een SEO-besluit zowel actuele technische waarheid als markt-/autoriteitscontext nodig heeft, bijvoorbeeld migratie, pruning/cleanup, redirectprioriteit, broken-backlink recovery of een volledige technische + markt/autoriteitsaudit.
-- **Search Console:** blijft de hogere bewijslaag voor Google's indexstatus en eigen Google Search-prestaties.
-
-Zie `SEO-TOOL-CONTRACT.md` voor de beslismatrix en `seo-tool-contract.json` voor het machineleesbare contract. De Project SEO/SEO-Skill-orkestratielaag kiest de tools; deze GitHub Action bevat geen Ahrefs-credentials of Ahrefs-API-aanroepen.
+De workflows houden bronrollen bewust uit elkaar: technische live-data bewijst wat de site nu serveert, Search Console is de hoogste bewijslaag voor eigen Google-index/status en search performance, en Ahrefs levert third-party backlink- en rankingcontext.
 
 ## Wat wordt gecontroleerd
 
-- HTTP-status en uiteindelijke URL
+Accountloos, bij iedere technische audit:
+
+- HTTP-status, redirects en uiteindelijke URL
 - meta robots / Googlebot `noindex`
 - title, meta description, H1 en canonical
+- hreflang op de gekozen URL
+- robots.txt en sitemap-kandidaat
 - JSON-LD-syntax en gevonden `@type`-waarden
-- robots.txt en een sitemap-kandidaat
-- SiteOne crawlrapport voor technische, SEO-, performance-, accessibility- en securitysignalen
+- SiteOne crawlrapport
 - Lighthouse CI labmeting
-- W3C Nu HTML-validatie
+- lokale W3C Nu HTML-validatie
 
-Toolmeldingen en scores zijn diagnostiek. Indexeerbaarheid, crawlbaarheid, zichtbare inhoud en first-party/live bewijs blijven leidend voor SEO-besluiten.
+Extra in **Full SEO Diagnostic**:
 
-## Audit uitvoeren
+- HTML `lang` tegenover de verwachte doeltaal
+- GSC clicks, impressions, CTR en positie over tijd
+- GSC vergelijking laatste 28 dagen versus vorige 28 dagen
+- sterkste 7-daagse daling in impressions
+- target-country prestaties en top queries/pages
+- GSC URL Inspection voor de opgegeven URL
+- Ahrefs referring-domain historie
+- Ahrefs backlinks stats
+- verdachte/spamachtige anchorpatronen
+- sample van referring domains met Ahrefs `is_spam`
+- gecombineerd `diagnostic-summary.json` + `diagnostic-summary.md`
 
-1. Open **Actions** in GitHub.
+## 1. Accountloze technische audit
+
+1. Open **Actions**.
 2. Kies **SEO Audit**.
-3. Kies **Run workflow**.
-4. Vul een volledige publieke `https://`-URL in.
-5. Open na afloop het artifact **seo-audit-report**.
+3. Klik **Run workflow**.
+4. Vul een publieke `https://`-URL in.
+5. Download na afloop artifact **seo-audit-report**.
 
-De workflow weigert doelen die naar niet-publieke IP-adressen resolven. Dit voorkomt dat de auditrunner als interne netwerkprobe wordt gebruikt.
+Hiervoor zijn geen API-keys, MCP-servers of andere accounts nodig dan GitHub zelf.
 
-Repository-readtoegang bewijst niet dat workflow-dispatch beschikbaar is. Als de uitvoeringssurface de GitHub Action niet kan starten, moet de SEO-orkestratielaag de seochecker-uitvoering als `handoff_required` behandelen; Ahrefs mag dan niet stilzwijgend de ontbrekende live technische verificatie vervangen.
+## 2. Volledige SEO-diagnose
 
-## Rapporten
+1. Open **Actions**.
+2. Kies **Full SEO Diagnostic**.
+3. Klik **Run workflow**.
+4. Vul minimaal de publieke URL in.
+5. Vul indien beschikbaar de exacte GSC property in, bijvoorbeeld `sc-domain:example.com`.
+6. Laat GSC/Ahrefs aangevinkt als de bijbehorende secrets zijn ingesteld.
+7. Download artifact **seo-diagnostic-report**.
 
-De workflow bewaart maximaal 14 dagen:
+Belangrijkste output:
 
+- `reports/diagnostic-summary.md`
+- `reports/diagnostic-summary.json`
 - `reports/basic-seo.json`
-- `reports/siteone.html`
+- `reports/language-report.json`
+- `reports/gsc-report.json`
+- `reports/ahrefs-report.json`
 - `reports/siteone.json`
-- `reports/siteone.txt`
+- `reports/siteone.html`
 - `reports/w3c-nu.json`
 - `.lighthouseci/`
 
-## Versies
+## GSC koppelen
 
-De workflow gebruikt bewust vaste versies voor reproduceerbaarheid:
+De repository gebruikt voor GSC een gewone OAuth 2.0 refresh-tokenconfiguratie. Dat voorkomt dat een workflow interactieve login nodig heeft.
 
-- SiteOne Crawler `2.5.1`, download gecontroleerd met SHA-256
-- Lighthouse CI `0.15.1`
-- `actions/checkout` `v7.0.1`
-- `actions/upload-artifact` `v7.0.1`
+Benodigde GitHub Actions secrets:
 
-## Grenzen
+- `GSC_CLIENT_ID`
+- `GSC_CLIENT_SECRET`
+- `GSC_REFRESH_TOKEN`
 
-- Lighthouse is labdata en vervangt geen Core Web Vitals-fielddata uit CrUX/Search Console.
-- JSON-LD-syntaxcontrole bewijst geen Google rich-result eligibility. Gebruik daarvoor waar relevant ook de actuele officiële Google-validator/documentatie.
-- De W3C-service en externe sites kunnen tijdelijk onbereikbaar of rate-limited zijn.
-- De tool belooft geen rankings, verkeer, leads of AI-citaties.
+De Google-account achter het refresh token moet minimaal leesrechten hebben op de Search Console-property. Gebruik scope `https://www.googleapis.com/auth/webmasters.readonly`.
+
+Google vereist voor de Search Console API een Google Cloud-project, geactiveerde Search Console API en OAuth-credentials. Dit is een eenmalige setup; daarna blijven de credentials als GitHub Actions secrets opgeslagen.
+
+Zie `docs/INTEGRATIONS.md` voor de setup en bewijsgrenzen.
+
+## Ahrefs koppelen
+
+Optionele GitHub Actions secret:
+
+- `AHREFS_API_KEY`
+
+De workflow gebruikt Ahrefs API v3 en vraagt alleen de data op die de diagnose ondersteunt: backlink stats, referring-domain history, anchors en een beperkte referring-domain sample.
+
+Geen Ahrefs key? De workflow blijft werken en schrijft `status: not_configured` in `reports/ahrefs-report.json`. De technische audit blijft gewoon uitvoerbaar.
+
+## Bewijsgrenzen
+
+- Een Ahrefs `is_spam`-label is geen Google-oordeel.
+- Ahrefs `first_seen` is wanneer Ahrefs een backlink voor het eerst vond, niet noodzakelijk de creatiedatum van de link.
+- Een sterk spamachtig backlinkprofiel bewijst op zichzelf geen Google-penalty.
+- URL Inspection API toont Google's indexstatus voor de URL; het is geen live URL-test.
+- Search Console **Handmatige acties** en **Beveiligingsproblemen** blijven een aparte handmatige controle.
+- Lighthouse is labdata en vervangt geen Core Web Vitals-fielddata.
+- Het rapport mag geen ranking-, traffic- of penaltyclaim maken die niet door de juiste bron wordt gedragen.
+
+## Veiligheid
+
+- Private, loopback en link-local targets worden geweigerd.
+- Commit nooit klantcredentials, OAuth-tokens, Ahrefs keys of klant-specifieke exports in deze publieke repository.
+- Gebruik GitHub Actions secrets voor credentials.
+- Klant-/run-specifieke waarheid hoort in artifacts of een tijdelijke runtime-branch, niet permanent op `main`.
 
 ## Ontwikkeltest
 
@@ -71,3 +117,5 @@ De workflow gebruikt bewust vaste versies voor reproduceerbaarheid:
 python3 -m unittest discover -s tests -v
 python3 -m py_compile scripts/*.py tests/*.py
 ```
+
+Zie `SEO-TOOL-CONTRACT.md` en `seo-tool-contract.json` voor de formele bron- en capabilitygrenzen.
