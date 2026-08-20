@@ -1,18 +1,46 @@
 {
-  "contract_version": "1.0.1",
-  "updated": "2026-08-15",
+  "contract_version": "2.0.0",
+  "updated": "2026-08-20",
   "repository": "Yolol100/seochecker",
-  "role": "current-owned-site-technical-evidence",
-  "workflow": ".github/workflows/seo-audit.yml",
-  "workflow_name": "SEO Audit",
-  "input": {"url": "explicit public http/https URL"},
-  "output_artifact": "seo-audit-report",
-  "capabilities": ["technical-crawl"],
-  "technical_regression_rule": "Use the same technical-crawl route before and after a technical change; regression evidence is a use case of technical-crawl, not a separate capability.",
-  "not_capabilities": ["keyword-research", "competitor-research", "backlink-analysis", "ranking-estimates", "rank-tracker", "brand-radar", "google-index-status", "owned-search-performance"],
-  "ahrefs_role": "external-market-visibility-link-intelligence",
-  "pair_with_ahrefs_when": ["migration-pruning-cleanup-or-redirect-priority-needs-market-or-link-value", "broken-backlink-recovery", "selected-owned-page-readiness-after-keyword-or-competitor-research", "complete-technical-plus-market-authority-audit"],
-  "precedence": {"current_technical_state": "seochecker-or-direct-live-evidence", "google_index_and_owned_search_performance": "google-search-console", "ahrefs_proprietary_metrics": "ahrefs"},
-  "runtime_gate": "require executable GitHub Actions dispatch or equivalent repository runtime; repository read alone is insufficient",
-  "return_fields": ["selected_tools", "selection_reason", "target_scope", "technical_evidence", "market_authority_evidence", "conflicts", "decision", "open_evidence", "next_action"]
+  "role": "reproducible-owned-site-seo-evidence",
+  "workflows": [
+    {
+      "workflow": ".github/workflows/seo-audit.yml",
+      "workflow_name": "SEO Audit",
+      "input": {"url": "explicit public http/https URL"},
+      "output_artifact": "seo-audit-report",
+      "capabilities": ["technical-crawl"],
+      "credentials": "none"
+    },
+    {
+      "workflow": ".github/workflows/full-seo-diagnostic.yml",
+      "workflow_name": "Full SEO Diagnostic",
+      "input": {
+        "url": "explicit public http/https URL",
+        "gsc_property": "optional exact Search Console property",
+        "country_code": "optional ISO 3166-1 alpha-3",
+        "expected_lang": "optional HTML language expectation"
+      },
+      "output_artifact": "seo-diagnostic-report",
+      "capabilities": ["technical-crawl", "owned-search-diagnostic", "backlink-diagnostic", "combined-diagnostic"],
+      "credentials": {
+        "gsc_optional": ["GSC_CLIENT_ID", "GSC_CLIENT_SECRET", "GSC_REFRESH_TOKEN"],
+        "ahrefs_optional": ["AHREFS_API_KEY"]
+      }
+    }
+  ],
+  "precedence": {
+    "google_index_and_owned_search_performance": "google-search-console",
+    "current_technical_state": "seochecker-or-direct-live-evidence",
+    "ahrefs_proprietary_metrics": "ahrefs"
+  },
+  "hard_boundaries": [
+    "ahrefs-spam-is-not-google-penalty",
+    "ahrefs-first-seen-is-discovery-not-link-creation-time",
+    "missing-credentials-become-open-evidence",
+    "manual-actions-and-security-issues-remain-manual-gsc-ui-checks",
+    "no-client-specific-hardcoding-on-default-branch"
+  ],
+  "runtime_gate": "require an actual workflow run plus logs/artifact before claiming execution evidence",
+  "return_fields": ["target_scope", "technical_evidence", "owned_search_evidence", "market_authority_evidence", "conflicts", "signals", "open_evidence", "next_action"]
 }
