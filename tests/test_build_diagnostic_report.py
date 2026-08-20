@@ -16,6 +16,7 @@ class DiagnosticRulesTests(unittest.TestCase):
             "status": "ok",
             "url_inspection": {"inspectionResult": {"indexStatusResult": {"verdict": "FAIL"}}},
             "target_country": {"period_comparison": {"impressions_change_pct": -90}},
+            "submitted_sitemaps": {"with_errors_or_warnings_count": 0},
         }
         ahrefs = {
             "status": "ok",
@@ -28,6 +29,24 @@ class DiagnosticRulesTests(unittest.TestCase):
         self.assertIn("gsc_visibility_drop", kinds)
         self.assertIn("automated_backlink_spam", kinds)
         self.assertEqual(signals[0]["type"], "google_index_status")
+
+    def test_surfaces_gsc_sitemap_errors_as_medium_signal(self):
+        signals = build_signals(
+            {"indexability_blockers": []},
+            {"status": "ok", "language_matches_expected": True},
+            {
+                "status": "ok",
+                "url_inspection": {"inspectionResult": {"indexStatusResult": {"verdict": "PASS"}}},
+                "target_country": {"period_comparison": {"impressions_change_pct": 0}},
+                "submitted_sitemaps": {
+                    "submitted_count": 2,
+                    "with_errors_or_warnings_count": 1,
+                    "problematic": [{"path": "https://example.com/products.xml", "errors": 2, "warnings": 0}],
+                },
+            },
+            {"status": "ok", "anchor_summary": {}, "refdomains_sample_summary": {}},
+        )
+        self.assertIn("gsc_sitemap_issues", [s["type"] for s in signals])
 
 
 if __name__ == "__main__":

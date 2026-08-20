@@ -39,7 +39,10 @@ GitHub Actions heeft geen menselijke browsersessie. De workflow gebruikt daarom 
 - target-country Search Analytics
 - top queries in het target country
 - top pages in het target country
+- ingediende/bekende sitemaps via de Search Console Sitemaps API, inclusief pending-, warning- en error-signalen
 - URL Inspection voor de opgegeven audit-URL
+
+De Sitemaps API laat zien wat Search Console voor de property kent. Een sitemap zonder API-fouten bewijst niet dat alle URL's uit die sitemap zijn geindexeerd.
 
 ### Niet beschikbaar via deze adapter
 
@@ -72,6 +75,16 @@ De adapter gebruikt Ahrefs API v3 Site Explorer:
 - `first_seen` is Ahrefs discovery-time.
 - Anchor/refdomain tabellen worden bewust begrensd tot maximaal 100 rijen voor brede plancompatibiliteit en kostenbeheersing.
 - Een backlinkspamsignaal wordt nooit automatisch vertaald naar "Google penalty".
+
+## Tijdelijke API-fouten
+
+De GSC- en Ahrefs-adapters proberen tijdelijke fouten automatisch opnieuw:
+
+- HTTP `429` (rate limit/throttling)
+- HTTP `500`, `502`, `503` en `504`
+- tijdelijke netwerk-/timeoutfouten
+
+Er zijn maximaal drie pogingen met exponentiele backoff. Als de server een numerieke `Retry-After` header meestuurt, gebruikt de adapter die wachttijd met een bovengrens van 30 seconden. Permanente fouten zoals `400`, `401` en `403` worden niet onnodig opnieuw geprobeerd.
 
 ## Zonder API-credentials
 
