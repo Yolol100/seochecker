@@ -55,6 +55,15 @@ def build_signals(basic, language, gsc, ahrefs):
             signals.append({"severity": "high", "type": "gsc_visibility_drop", "evidence": comp, "score": 5})
         elif isinstance(change, (int, float)) and change <= -40:
             signals.append({"severity": "medium", "type": "gsc_visibility_drop", "evidence": comp, "score": 3})
+        sitemap_summary = gsc.get("submitted_sitemaps", {})
+        sitemap_issues = sitemap_summary.get("with_errors_or_warnings_count")
+        if isinstance(sitemap_issues, int) and sitemap_issues > 0:
+            signals.append({
+                "severity": "medium",
+                "type": "gsc_sitemap_issues",
+                "evidence": sitemap_summary,
+                "score": 2,
+            })
 
     if ahrefs.get("status") == "ok":
         anchor = ahrefs.get("anchor_summary", {})
@@ -106,6 +115,7 @@ def build_markdown(target_url, signals, basic, language, gsc, ahrefs, open_items
             "language_mismatch": "Taalinstelling wijkt af",
             "google_index_status": "Google URL Inspection geeft geen PASS",
             "gsc_visibility_drop": "Sterke daling in GSC-vertoningen",
+            "gsc_sitemap_issues": "Search Console meldt sitemap-waarschuwingen of -fouten",
             "automated_backlink_spam": "Sterk signaal van geautomatiseerde backlinkspam",
             "suspicious_backlinks": "Verdachte backlinkpatronen",
         }
@@ -120,8 +130,10 @@ def build_markdown(target_url, signals, basic, language, gsc, ahrefs, open_items
     if gsc.get("status") == "ok":
         idx = gsc_index_status(gsc)
         comp = gsc.get("target_country", {}).get("period_comparison", {})
+        sitemaps = gsc.get("submitted_sitemaps", {})
         lines.append(f"- GSC URL Inspection verdict: `{idx.get('verdict')}`; coverage: `{idx.get('coverage_state')}`")
         lines.append(f"- GSC target-country impressions change (laatste 28d vs vorige 28d): `{comp.get('impressions_change_pct')}`%")
+        lines.append(f"- GSC ingediende/bekende sitemaps: `{sitemaps.get('submitted_count')}`; met fouten/waarschuwingen: `{sitemaps.get('with_errors_or_warnings_count')}`; pending: `{sitemaps.get('pending_count')}`")
     else:
         lines.append(f"- GSC: `{gsc.get('status')}` — {gsc.get('reason') or gsc.get('error') or 'geen data'}")
     if ahrefs.get("status") == "ok":
