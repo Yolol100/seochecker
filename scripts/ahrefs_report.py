@@ -3,6 +3,7 @@ import argparse
 import json
 import os
 import re
+import time
 from datetime import date, timedelta
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -10,6 +11,10 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 BASE = "https://api.ahrefs.com/v3/site-explorer"
+RETRYABLE_HTTP_STATUS = {429, 500, 502, 503, 504}
+DEFAULT_ATTEMPTS = 3
+DEFAULT_RETRY_BASE_SECONDS = 1.0
+MAX_RETRY_AFTER_SECONDS = 30.0
 SUSPICIOUS_ANCHOR_PATTERNS = [
     r"seoexpress",
     r"\bpbn\b",
@@ -24,17 +29,52 @@ SUSPICIOUS_ANCHOR_PATTERNS = [
 ]
 
 
-def api_get(endpoint, api_key, params, timeout=45):
+def _retry_delay(headers, attempt, base_seconds):
+    retry_after = None
+    if headers is not None:
+        try:
+            retry_after = headers.get("Retry-After")
+        except AttributeError:
+            retry_after = None
+    if retry_after:
+        try:
+            return min(max(float(retry_after), 0.0), MAX_RETRY_AFTER_SECONDS)
+        except (TypeError, ValueError):
+            pass
+    return base_seconds * (2 ** max(attempt - 1, 0))
+
+
+def api_get(
+    endpoint,
+    api_key,
+    params,
+    timeout=45,
+    attempts=DEFAULT_ATTEMPTS,
+    retry_base_seconds=DEFAULT_RETRY_BASE_SECONDS,
+    sleeper=None,
+):
     url = f"{BASE}/{endpoint}?{urlencode(params)}"
     req = Request(url, headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"})
-    try:
-        with urlopen(req, timeout=timeout) as response:
-            return json.loads(response.read().decode("utf-8", errors="replace"))
-    except HTTPError as exc:
-        raw = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"Ahrefs HTTP {exc.code}: {raw[:1200]}") from exc
-    except (URLError, TimeoutError, OSError) as exc:
-        raise RuntimeError(str(exc)) from exc
+    sleeper = sleeper or time.sleep
+    attempts = max(int(attempts), 1)
+
+    for attempt in range(1, attempts + 1):
+        try:
+            with urlopen(req, timeout=timeout) as response:
+                return json.loads(response.read().decode("utf-8", errors="replace"))
+        except HTTPError as exc:
+            raw = exc.read().decode("utf-8", errors="replace")
+            if exc.code in RETRYABLE_HTTP_STATUS and attempt < attempts:
+                sleeper(_retry_delay(exc.headers, attempt, retry_base_seconds))
+                continue
+            raise RuntimeError(f"Ahrefs HTTP {exc.code}: {raw[:1200]}") from exc
+        except (URLError, TimeoutError, OSError) as exc:
+            if attempt < attempts:
+                sleeper(_retry_delay(None, attempt, retry_base_seconds))
+                continue
+            raise RuntimeError(str(exc)) from exc
+
+    raise RuntimeError("Ahrefs API request failed after retries")
 
 
 def is_suspicious_anchor(anchor):
@@ -140,6 +180,7 @@ def build_report(target, days, api_key):
             "Ahrefs first_seen betekent wanneer Ahrefs een backlink voor het eerst vond, niet noodzakelijk wanneer die link is aangemaakt.",
             "is_spam is een Ahrefs-classificatie, niet Google's oordeel.",
             "Anchor- en referring-domainlijsten zijn beperkt tot een compatibele sample van maximaal 100 rijen per endpoint.",
+            "Tijdelijke HTTP 429/5xx- en netwerkfouten worden maximaal drie keer geprobeerd met oplopende wachttijd.",
         ],
     }
 
