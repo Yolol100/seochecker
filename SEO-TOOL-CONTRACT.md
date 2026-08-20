@@ -1,94 +1,86 @@
-# SEO Tool Contract: seochecker + Ahrefs
+# SEO Tool Contract: seochecker + GSC + Ahrefs
 
-This repository has one job: produce current technical evidence for a public owned URL/site. It does not replace Ahrefs and it does not call Ahrefs directly.
+Deze repository levert reproduceerbare SEO-evidence voor een expliciete publieke owned URL/site. Hij heeft een accountloze technische kern en een optionele full-diagnostic laag.
 
-## Roles
+## Bronrollen
 
-### seochecker
+### Technische kern
 
-Purpose: answer **what is technically true now on this public owned URL/site?**
+Beantwoordt: **wat is technisch waar op de publieke URL/site tijdens deze run?**
 
-Use for:
+Gebruik voor:
 
-- HTTP/final URL and redirect behavior
-- robots/noindex, canonical and sitemap checks
-- title, meta description and H1 checks
+- HTTP/final URL en redirects
+- robots/noindex, canonical en sitemap
+- title, meta description, H1
+- HTML lang en hreflang op de gekozen URL
 - JSON-LD syntax/types
-- SiteOne technical crawl
-- Lighthouse CI lab evidence
-- W3C Nu HTML validation
-- technical pre/post-change regression evidence through the same `technical-crawl` capability
+- SiteOne technische crawl
+- Lighthouse CI labdata
+- W3C Nu HTML-validatie
 
-Do not use as a source for keyword demand, competitor opportunity, backlink authority, ranking estimates, Rank Tracker, Brand Radar or Google's indexed/performance state.
+### Google Search Console
+
+Beantwoordt: **wat ziet Google op deze eigen property en hoe veranderde de eigen Google Search-performance?**
+
+Gebruik voor:
+
+- clicks, impressions, CTR en gemiddelde positie
+- datum- en landsegmentatie
+- query- en page-performance
+- URL Inspection indexstatus/canonical/crawlstatus
+
+GSC heeft voor eigen Google-index/status en owned Search-performance voorrang op Ahrefs-schattingen.
 
 ### Ahrefs
 
-Purpose: answer **where is the external search, market, competitive, ranking or link opportunity/context?**
+Beantwoordt: **welke backlink-, authority- en externe search-context ziet Ahrefs?**
 
-Use for:
+Gebruik voor:
 
-- Keywords Explorer and SERP context
-- organic competitors, estimated rankings and top pages
-- backlinks, referring domains and link gaps
-- Rank Tracker
-- Brand Radar
-- existing Ahrefs Site Audit project/report questions
+- referring-domain historie
+- backlink stats
+- anchorpatronen
+- Ahrefs spamclassificatie in een begrensde sample
 
-Ahrefs metrics are third-party diagnostic data. An Ahrefs crawl does not replace a current live technical verification when the action depends on current implementation.
+Ahrefs-data is third-party diagnostiek en wordt nooit vertaald naar een Google-penalty zonder Google-evidence.
 
-## When to use one or both
+## Workflows
 
-| Situation | seochecker | Ahrefs |
-|---|---:|---:|
-| Technical audit or technical regression | yes | only if impact/priority needs market or authority data |
-| Keyword, competitor or SERP opportunity | only for selected owned URL readiness | yes |
-| Backlink/referring-domain analysis | only to verify an owned target/replacement URL | yes |
-| Existing Ahrefs Site Audit report question | optional live verification | yes |
-| Migration, pruning, cleanup or redirect priority | yes | yes when ranking/link/value context changes the decision |
-| Broken backlink recovery | yes on target/replacement | yes to find and value the link opportunity |
-| Complete technical + market/authority audit | yes | yes |
+### `SEO Audit`
 
-## Order
+- Bestand: `.github/workflows/seo-audit.yml`
+- Input: publieke URL
+- Credentials: geen
+- Artifact: `seo-audit-report`
+- Capability: `technical-crawl`
 
-1. Start from the decision, not the tools.
-2. Technical trigger: run seochecker/live checks first, then use Ahrefs only for impact, demand, competition or authority context.
-3. Keyword/backlink/competitor trigger: use Ahrefs first, then run seochecker only on owned URLs selected for action.
-4. Migration/pruning/cleanup: collect both evidence classes before redirect/noindex/delete/consolidate decisions.
-5. Return one normalized SEO decision, not two tool dumps.
+### `Full SEO Diagnostic`
 
-## Capability rule
-
-`technical-crawl` is the only technical crawl capability exposed by this repository. Before/after regression evidence is a use case of `technical-crawl`, not a separate capability.
+- Bestand: `.github/workflows/full-seo-diagnostic.yml`
+- Input: publieke URL + optionele taal/land/GSC-property
+- Credentials: technisch geen; GSC/Ahrefs optioneel via secrets
+- Artifact: `seo-diagnostic-report`
+- Capabilities: `technical-crawl`, `owned-search-diagnostic`, `backlink-diagnostic`, `combined-diagnostic`
 
 ## Evidence precedence
 
-- Current HTTP, redirects, directives, canonical, sitemap, markup and live crawl state: current seochecker/direct live evidence wins over an older third-party crawl snapshot.
-- Google's indexed state and owned Google Search performance: Search Console is the higher evidence layer.
-- Ahrefs keyword, backlink, referring-domain, estimated ranking/traffic, Rank Tracker and Brand Radar metrics: Ahrefs is the source for its own dataset only.
-- If technical results disagree, compare run dates and scope and re-check live. Do not average conflicting signals.
+1. Google's indexstatus en eigen Google Search performance: **Search Console**.
+2. Huidige HTTP, directives, canonical, markup en crawlstaat: **actuele seochecker/live evidence**.
+3. Ahrefs proprietary backlink/ranking metrics: **Ahrefs als bron voor zijn eigen dataset**.
+4. Bij conflict: vergelijk datum, scope en property/target; gemiddelde waarden nooit weg.
 
-## Invocation
+## Beslisregels
 
-- Repository: `Yolol100/seochecker`
-- Workflow: `.github/workflows/seo-audit.yml` (`SEO Audit`)
-- Input: one explicit public `http://` or `https://` URL
-- Output: workflow summary and artifact `seo-audit-report`
-- Security: private, loopback, link-local and other non-public targets are rejected
+- Bewezen `noindex`, robots/canonical/fetchproblemen of GSC URL Inspection failures gaan vóór backlinkhypotheses.
+- Een sterke GSC-daling met een technisch indexeerbare URL wijst op een ranking/quality/algorithm-vraag, niet automatisch op de-indexatie.
+- Spamachtige anchors/refdomains zijn een backlinkspamsignaal, geen bewezen straf.
+- Ontbrekende credentials leveren `open_evidence`, geen ingevulde schatting.
+- Manual Actions en Security Issues blijven een afzonderlijke GSC UI-check.
 
-Repository read access does not prove workflow-dispatch capability. The orchestration layer may call this repo only when GitHub Actions dispatch or an equivalent repository runtime is actually executable. Otherwise repo execution is `handoff_required`; Ahrefs must not be used as a silent replacement for missing live technical evidence.
+## Runtime- en securityregel
 
-## Return contract for the SEO orchestration layer
-
-When this repo is used alone or together with Ahrefs, normalize the final result into:
-
-- `selected_tools`
-- `selection_reason`
-- `target_scope`
-- `technical_evidence`
-- `market_authority_evidence`
-- `conflicts`
-- `decision`
-- `open_evidence`
-- `next_action`
-
-Do not translate Ahrefs estimates into live technical facts. Do not translate seochecker findings into keyword demand, backlink authority, ranking potential or Google index status.
+- Alleen publieke HTTP(S)-targets.
+- Secrets alleen via GitHub Actions secrets.
+- Geen klant-/targetspecifieke hardcoding op `main`.
+- Repository-readtoegang bewijst niet dat een workflow daadwerkelijk is uitgevoerd; resultaatclaims vereisen een echte run + artifact/logs.
