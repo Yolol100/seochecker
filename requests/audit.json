@@ -1,0 +1,17 @@
+{
+  "enabled": true,
+  "request_id": "doctorcura-20260821-home",
+  "owner": "seo",
+  "project_id": "project-seo",
+  "for": "Doctorcura.com technical SEO audit",
+  "task": "Run a live technical SEO audit for the Doctorcura.com homepage as part of a broader SEO analysis.",
+  "why": "Need current technical evidence to combine with Search Console and Ahrefs evidence.",
+  "trigger_when": "This runtime branch is pushed for the current Doctorcura.com audit.",
+  "do_not_trigger_when": "The request is disabled or source context no longer matches the active Project SEO source set.",
+  "requested_by": "user",
+  "url": "https://doctorcura.com/",
+  "source_context": {
+    "project_id": "project-seo",
+    "source_set_version": "2.6.8-seochecker-request-routing"
+  }
+}
