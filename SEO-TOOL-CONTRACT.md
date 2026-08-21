@@ -78,6 +78,29 @@ Ahrefs-data is third-party diagnostiek en wordt nooit vertaald naar een Google-p
 - Ontbrekende credentials leveren `open_evidence`, geen ingevulde schatting.
 - Manual Actions en Security Issues blijven een afzonderlijke GSC UI-check.
 
+## Publicatiestatus en evidence-transitie
+
+Gebruik statuslabels alleen binnen de evidence die ze werkelijk ondersteunen:
+
+- `draft` — content of configuratie bestaat, maar live output is niet bewezen.
+- `staging` — geïntegreerde niet-productie-output is gecontroleerd.
+- `reported_live` — een eigenaar/gebruiker meldt dat de wijziging live staat; productie-output is nog niet onafhankelijk geverifieerd.
+- `production_verified` — de relevante live URL's zijn na de wijziging opnieuw gecontroleerd.
+
+Een statuswijziging invalideert oudere evidence niet als historie, maar wel als actuele productieclaim. Na `draft -> live` of `staging -> live` moet wijzigingsrelevante productie-evidence opnieuw worden verzameld. Minimaal waar relevant: HTTP/final URL, robots/indexability, canonical, sitemap, rendered metadata, links en media. Een importbestand, CMS-instelling of code-snippet bewijst niet dat dezelfde toestand live wordt gerenderd.
+
+## Content- en mediawrites
+
+Voor automatische content- of mediakoppeling geldt fail-closed gedrag:
+
+- gebruik bij voorkeur een stabiele unieke identifier of exacte canonical slug;
+- gebruik geen fuzzy titelmatch als primaire write-route wanneer meerdere vergelijkbare targets kunnen bestaan;
+- schrijf niets wanneer geen exact geldig target is gevonden;
+- controleer het verwachte contenttype vóór de write;
+- hertest de uiteindelijke output na de write voordat de wijziging als afgerond geldt.
+
+Voor algemene regels over afbeeldingmetadata, interne linking, taxonomie en publicatiecontrole: zie `docs/CONTENT-MEDIA-GUIDELINES.md`.
+
 ## Runtime- en securityregel
 
 - Alleen publieke HTTP(S)-targets.

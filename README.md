@@ -94,6 +94,18 @@ De workflow gebruikt Ahrefs API v3 en vraagt alleen de data op die de diagnose o
 
 Geen Ahrefs key? De workflow blijft werken en schrijft `status: not_configured` in `reports/ahrefs-report.json`. De technische audit blijft gewoon uitvoerbaar.
 
+## Algemene content- en mediaregels
+
+Naast de technische audit bevat deze repository generieke operationele SEO-richtlijnen voor contentproductie en publicatie-QA. Zie `docs/CONTENT-MEDIA-GUIDELINES.md` voor:
+
+- beschrijvende bestandsnamen en feitelijke alt-tekst zonder keyword stuffing;
+- featured/preferred-image en rendered-metadata controle;
+- fail-closed automatische koppeling van media of content aan exacte targets;
+- interne linkmatrices zonder geforceerde all-to-all linking;
+- taxonomie zonder dunne of dubbele categorieën;
+- statusovergangen zoals `draft -> reported_live -> production_verified`;
+- bewijsgrenzen tussen CMS/configuratie en daadwerkelijk gerenderde live output.
+
 ## Bewijsgrenzen
 
 - Een Ahrefs `is_spam`-label is geen Google-oordeel.
@@ -102,6 +114,8 @@ Geen Ahrefs key? De workflow blijft werken en schrijft `status: not_configured` 
 - URL Inspection API toont Google's indexstatus voor de URL; het is geen live URL-test.
 - Search Console **Handmatige acties** en **Beveiligingsproblemen** blijven een aparte handmatige controle.
 - Lighthouse is labdata en vervangt geen Core Web Vitals-fielddata.
+- Een CMS-instelling, importbestand of code-snippet bewijst niet dat dezelfde toestand live wordt gerenderd.
+- Een melding dat content live staat is `reported_live`; productieclaims vragen een nieuwe live controle.
 - Het rapport mag geen ranking-, traffic- of penaltyclaim maken die niet door de juiste bron wordt gedragen.
 
 ## Veiligheid
@@ -110,6 +124,7 @@ Geen Ahrefs key? De workflow blijft werken en schrijft `status: not_configured` 
 - Commit nooit klantcredentials, OAuth-tokens, Ahrefs keys of klant-specifieke exports in deze publieke repository.
 - Gebruik GitHub Actions secrets voor credentials.
 - Klant-/run-specifieke waarheid hoort in artifacts of een tijdelijke runtime-branch, niet permanent op `main`.
+- Automatische writes naar content/media moeten exact targeten en stoppen wanneer geen uniek geldig doel is gevonden.
 
 ## Ontwikkeltest
 
