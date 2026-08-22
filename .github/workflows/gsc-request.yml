@@ -7,6 +7,8 @@ on:
       - 'requests/gsc-request.json'
       - '.github/workflows/gsc-request.yml'
       - 'scripts/gsc_report.py'
+      - 'tests/test_gsc_report.py'
+      - 'tests/test_gsc_neutral_defaults.py'
 
 permissions:
   contents: read
@@ -22,36 +24,77 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Validate GSC adapter
+        run: |
+          python3 -m unittest tests.test_gsc_report tests.test_gsc_neutral_defaults -v
+          python3 -m py_compile scripts/gsc_report.py tests/test_gsc_report.py tests/test_gsc_neutral_defaults.py
+
+      - name: Detect request
+        id: request
+        shell: bash
+        run: |
+          if [ -f requests/gsc-request.json ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "No requests/gsc-request.json in this PR; adapter validation only."
+          fi
+
       - name: Validate request
+        if: steps.request.outputs.present == 'true'
         run: |
           python3 - <<'PY'
           import json
+          import re
           from pathlib import Path
           from urllib.parse import urlparse
+
           req = json.loads(Path('requests/gsc-request.json').read_text())
-          required = ['target_url','gsc_property','country_code','language_code','history_days']
+          required = ['target_url', 'gsc_property', 'history_days']
           missing = [k for k in required if k not in req]
           if missing:
               raise SystemExit('missing: ' + ', '.join(missing))
-          if urlparse(req['target_url']).scheme not in ('http','https'):
+
+          target = str(req['target_url']).strip()
+          parsed = urlparse(target)
+          if parsed.scheme not in ('http', 'https') or not parsed.hostname:
               raise SystemExit('invalid target_url')
-          if not isinstance(req['history_days'], int) or req['history_days'] < 56 or req['history_days'] > 365:
+
+          prop = str(req['gsc_property']).strip()
+          if not prop:
+              raise SystemExit('gsc_property must be non-empty')
+
+          days = req['history_days']
+          if not isinstance(days, int) or days < 56 or days > 365:
               raise SystemExit('history_days must be an integer between 56 and 365')
+
+          country = str(req.get('country_code', '')).strip()
+          if country and not re.fullmatch(r'[A-Za-z]{3}', country):
+              raise SystemExit('country_code must be blank or ISO alpha-3')
+
+          language = str(req.get('language_code', '')).strip()
+          if language and not re.fullmatch(r'[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*', language):
+              raise SystemExit('language_code must be blank or a valid BCP-47-like tag')
           PY
+
       - name: Read request
+        if: steps.request.outputs.present == 'true'
         shell: bash
         run: |
           python3 - <<'PY' >> "$GITHUB_ENV"
           import json
           from pathlib import Path
           req = json.loads(Path('requests/gsc-request.json').read_text())
-          print('TARGET_URL=' + req['target_url'])
-          print('GSC_PROPERTY=' + req['gsc_property'])
-          print('COUNTRY_CODE=' + req['country_code'])
-          print('LANGUAGE_CODE=' + req['language_code'])
+          print('TARGET_URL=' + str(req['target_url']).strip())
+          print('GSC_PROPERTY=' + str(req['gsc_property']).strip())
+          print('COUNTRY_CODE=' + str(req.get('country_code', '')).strip())
+          print('LANGUAGE_CODE=' + str(req.get('language_code', '')).strip())
           print('HISTORY_DAYS=' + str(req['history_days']))
           PY
+
       - name: Pull Search Console data
+        if: steps.request.outputs.present == 'true'
         run: |
           python3 scripts/gsc_report.py \
             --site-url "$GSC_PROPERTY" \
@@ -66,7 +109,9 @@ jobs:
           if d.get('status') != 'ok':
               raise SystemExit('GSC request failed: ' + json.dumps(d, ensure_ascii=False))
           PY
+
       - name: Upload GSC report
+        if: steps.request.outputs.present == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: gsc-request-report

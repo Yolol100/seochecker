@@ -122,16 +122,18 @@ def list_sitemaps(token, site_url):
     )
 
 
-def inspect_url(token, site_url, inspection_url, language_code):
+def inspect_url(token, site_url, inspection_url, language_code=""):
+    payload = {
+        "inspectionUrl": inspection_url,
+        "siteUrl": site_url,
+    }
+    if language_code:
+        payload["languageCode"] = language_code
     return request_json(
         URL_INSPECTION_URL,
         method="POST",
         headers={"Authorization": f"Bearer {token}"},
-        payload={
-            "inspectionUrl": inspection_url,
-            "siteUrl": site_url,
-            "languageCode": language_code,
-        },
+        payload=payload,
     )
 
 
@@ -304,6 +306,7 @@ def build_report(site_url, inspection_url, country_code, language_code, days, cr
         "site_url": site_url,
         "inspection_url": inspection_url,
         "country_code": country_code.upper() if country_code else None,
+        "language_code": language_code or None,
         "date_range": {"start": start.isoformat(), "end": end.isoformat()},
         "all_search": {
             "period_comparison": period_comparison(all_daily, end.isoformat()),
@@ -333,8 +336,8 @@ def main():
     parser = argparse.ArgumentParser(description="Google Search Console diagnostic report")
     parser.add_argument("--site-url", default="")
     parser.add_argument("--inspection-url", required=True)
-    parser.add_argument("--country-code", default="DEU")
-    parser.add_argument("--language-code", default="de-DE")
+    parser.add_argument("--country-code", default="")
+    parser.add_argument("--language-code", default="")
     parser.add_argument("--days", type=int, default=180)
     parser.add_argument("--output", default="reports/gsc-report.json")
     args = parser.parse_args()

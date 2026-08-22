@@ -8,19 +8,19 @@ on:
         required: true
         type: string
       expected_lang:
-        description: "Verwachte HTML-taal (bijv. de, nl, en)"
+        description: "Optioneel: verwachte HTML-taal (bijv. nl, en, de)"
         required: false
-        default: "de"
+        default: ""
         type: string
       country_code:
-        description: "GSC landcode ISO alpha-3 (bijv. DEU, NLD)"
+        description: "Optioneel: GSC landcode ISO alpha-3 (bijv. NLD, DEU)"
         required: false
-        default: "DEU"
+        default: ""
         type: string
       language_code:
-        description: "Taalcode voor GSC URL Inspection (bijv. de-DE)"
+        description: "Optioneel: taalcode voor GSC URL Inspection (bijv. nl-NL)"
         required: false
-        default: "de-DE"
+        default: ""
         type: string
       gsc_property:
         description: "Optioneel: exacte GSC property, bijv. sc-domain:example.com"
