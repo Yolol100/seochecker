@@ -50,6 +50,7 @@ jobs:
       run: ${{ steps.resolve.outputs.run }}
       request_id: ${{ steps.resolve.outputs.request_id }}
       target_url: ${{ steps.resolve.outputs.target_url }}
+      source_set_version: ${{ steps.resolve.outputs.source_set_version }}
     steps:
       - name: Checkout request
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -68,6 +69,7 @@ jobs:
           let run = false;
           let requestId = 'none';
           let targetUrl = '';
+          let sourceSetVersion = '';
           if (process.env.GITHUB_EVENT_NAME === 'workflow_dispatch') {
             targetUrl = process.env.DISPATCH_URL || '';
             new URL(targetUrl);
@@ -86,6 +88,7 @@ jobs:
               }
               targetUrl = req.url || '';
               new URL(targetUrl);
+              sourceSetVersion = req.source_context.source_set_version.trim();
               run = true;
               requestId = req.request_id;
             }
@@ -93,6 +96,7 @@ jobs:
           write('run', run ? 'true' : 'false');
           write('request_id', requestId);
           write('target_url', targetUrl);
+          write('source_set_version', sourceSetVersion);
           NODE
 
   audit:
@@ -102,6 +106,8 @@ jobs:
     timeout-minutes: 35
     env:
       TARGET_URL: ${{ needs.resolve-request.outputs.target_url }}
+      REQUEST_ID: ${{ needs.resolve-request.outputs.request_id }}
+      SOURCE_SET_VERSION: ${{ needs.resolve-request.outputs.source_set_version }}
       SITEONE_VERSION: "2.5.1"
       SITEONE_SHA256: "09278d958d4a087fa46093805cd33b085b96618001dd31d45c448ad724c9024e"
       VNU_ASSET_ID: "515207969"
@@ -145,7 +151,11 @@ jobs:
       - name: Lighthouse CI collection
         id: lighthouse
         continue-on-error: true
-        run: npx --no-install lhci collect --url="$TARGET_URL" --numberOfRuns=1
+        run: npx --no-install lhci collect --url="$TARGET_URL" --numberOfRuns=3
+      - name: Normalize Lighthouse evidence
+        id: lighthouse_summary
+        if: steps.lighthouse.outcome == 'success'
+        run: python3 scripts/lighthouse_summary.py --input-dir .lighthouseci --output reports/lighthouse-summary.json
       - name: Set up Java 17 for local Nu Checker
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
         with:
@@ -170,13 +180,30 @@ jobs:
             --format json \
             "$TARGET_URL" > reports/w3c-nu.json
           test -s reports/w3c-nu.json
+      - name: Build evidence manifest
+        id: evidence_manifest
+        if: always()
+        run: |
+          python3 scripts/build_evidence_manifest.py \
+            --workflow "SEO Audit" \
+            --target-url "$TARGET_URL" \
+            --request-id "$REQUEST_ID" \
+            --source-set-version "$SOURCE_SET_VERSION" \
+            --artifact basic=reports/basic-seo.json \
+            --artifact siteone-json=reports/siteone.json \
+            --artifact siteone-html=reports/siteone.html \
+            --artifact lighthouse-summary=reports/lighthouse-summary.json \
+            --artifact lighthouse-raw=.lighthouseci \
+            --artifact w3c-nu=reports/w3c-nu.json \
+            --output reports/evidence-manifest.json
       - name: Write audit summary
         if: always()
         run: |
           {
             echo "## SEO Audit"
             echo ""
-            echo "Request: ${{ needs.resolve-request.outputs.request_id }}"
+            echo "Request: $REQUEST_ID"
+            echo "Source set: ${SOURCE_SET_VERSION:-not-provided}"
             echo "Target: $TARGET_URL"
             echo ""
             echo "| Controle | Status |"
@@ -184,7 +211,9 @@ jobs:
             echo "| Indexability/basic SEO | ${{ steps.basic.outcome }} |"
             echo "| SiteOne crawl | ${{ steps.siteone.outcome }} |"
             echo "| Lighthouse CI | ${{ steps.lighthouse.outcome }} |"
+            echo "| Lighthouse summary | ${{ steps.lighthouse_summary.outcome }} |"
             echo "| Local Nu HTML | ${{ steps.vnu.outcome }} |"
+            echo "| Evidence manifest | ${{ steps.evidence_manifest.outcome }} |"
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Upload audit reports
         if: always()
@@ -203,7 +232,9 @@ jobs:
           [ "${{ steps.basic.outcome }}" = "success" ] || failed=1
           [ "${{ steps.siteone.outcome }}" = "success" ] || failed=1
           [ "${{ steps.lighthouse.outcome }}" = "success" ] || failed=1
+          [ "${{ steps.lighthouse_summary.outcome }}" = "success" ] || failed=1
           [ "${{ steps.vnu.outcome }}" = "success" ] || failed=1
+          [ "${{ steps.evidence_manifest.outcome }}" = "success" ] || failed=1
           if [ "$failed" -ne 0 ]; then
             echo "Een of meer kerncontroles zijn niet succesvol uitgevoerd. Bekijk de artefacts en logs."
             exit 1
