@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.1",
+  "schema_version": "1.2",
   "owner_skill": "seo",
   "project_id": "project-seo",
   "repository": "Yolol100/seochecker",
@@ -10,18 +10,21 @@
   "tools": [
     {"id":"core-indexability","version":"repo","trigger_when":"every technical audit","outputs":["reports/basic-seo.json"]},
     {"id":"siteone","version":"2.5.1","trigger_when":"every technical audit","outputs":["reports/siteone.json","reports/siteone.html"]},
-    {"id":"lighthouse-ci","version":"0.15.1","trigger_when":"every technical audit","outputs":[".lighthouseci/"]},
-    {"id":"nu-html-checker","version":"asset-515207969","sha256":"c70279e260e5f4f9e95b3890ef6c9548f90ebdaec2a75219ec41694ab6241e34","trigger_when":"every technical audit","outputs":["reports/w3c-nu.json"]}
+    {"id":"lighthouse-ci","version":"0.15.1","trigger_when":"every technical audit","outputs":["reports/lighthouse-summary.json",".lighthouseci/"]},
+    {"id":"nu-html-checker","version":"asset-515207969","sha256":"c70279e260e5f4f9e95b3890ef6c9548f90ebdaec2a75219ec41694ab6241e34","trigger_when":"every technical audit","outputs":["reports/w3c-nu.json"]},
+    {"id":"evidence-manifest","version":"1.0","trigger_when":"every technical audit","outputs":["reports/evidence-manifest.json"]}
   ],
   "usage_assertions": [
     {"tool":"core-indexability","path":".github/workflows/seo-audit.yml","contains":"seo_basic_check.py"},
     {"tool":"siteone","path":".github/workflows/seo-audit.yml","contains":"siteone-crawler"},
-    {"tool":"lighthouse-ci","path":".github/workflows/seo-audit.yml","contains":"npx --no-install lhci collect"},
-    {"tool":"nu-html-checker","path":".github/workflows/seo-audit.yml","contains":"VNU_ASSET_ID"}
+    {"tool":"lighthouse-ci","path":".github/workflows/seo-audit.yml","contains":"lighthouse_summary.py"},
+    {"tool":"nu-html-checker","path":".github/workflows/seo-audit.yml","contains":"VNU_ASSET_ID"},
+    {"tool":"evidence-manifest","path":".github/workflows/seo-audit.yml","contains":"build_evidence_manifest.py"}
   ],
   "boundaries": [
     "The registered core toolkit remains accountless and API-key-free.",
     "Full SEO Diagnostic may optionally consume GSC/Ahrefs through separately configured secrets.",
-    "Tool findings are diagnostics; SEO owns interpretation."
+    "Tool findings are diagnostics; SEO owns interpretation.",
+    "The evidence manifest is provenance and artifact inventory, not a replacement for Project SEO source truth."
   ]
 }

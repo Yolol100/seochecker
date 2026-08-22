@@ -1,5 +1,5 @@
 {
-  "contract_version": "2.1.0",
+  "contract_version": "2.2.0",
   "updated": "2026-08-22",
   "repository": "Yolol100/seochecker",
   "role": "reproducible-owned-site-seo-evidence",
@@ -7,8 +7,10 @@
     {
       "workflow": ".github/workflows/seo-audit.yml",
       "workflow_name": "SEO Audit",
-      "input": {"url": "explicit public http/https URL"},
+      "input": {"url": "explicit public http/https URL", "source_context": "optional through source-bound request"},
       "output_artifact": "seo-audit-report",
+      "primary_runtime_manifest": "reports/evidence-manifest.json",
+      "normalized_outputs": ["reports/evidence-manifest.json", "reports/basic-seo.json", "reports/lighthouse-summary.json"],
       "capabilities": ["technical-crawl"],
       "credentials": "none"
     },
@@ -43,14 +45,17 @@
     "x-robots-tag-is-part-of-indexability-evidence",
     "title-and-meta-description-character-counts-are-measurements-not-google-indexability-limits",
     "multiple-h1-elements-are-not-a-google-indexability-blocker",
-    "project-source-set-version-is-caller-provenance-and-must-not-be-hardcoded-on-main"
+    "project-source-set-version-is-caller-provenance-and-must-not-be-hardcoded-on-main",
+    "lighthouse-summary-is-lab-evidence-not-field-data",
+    "evidence-manifest-is-provenance-and-inventory-not-project-policy"
   ],
   "consumer_contract": {
     "owner": "seo",
     "project_id": "project-seo",
     "interpretation": "SEO Skill owns interpretation and combines repository evidence with current Project SEO sources, GSC and Ahrefs without merging source roles.",
-    "source_context": "When a source-bound request is used, preserve source_context.source_set_version in run reporting/evidence; repository main remains source-version agnostic."
+    "source_context": "When a source-bound request is used, preserve source_context.source_set_version in run reporting/evidence; repository main remains source-version agnostic.",
+    "read_order": "For SEO Audit artifacts read reports/evidence-manifest.json first, then open only the evidence files needed for the decision."
   },
   "runtime_gate": "require an actual workflow run plus logs/artifact before claiming execution evidence",
-  "return_fields": ["target_scope", "source_context", "technical_evidence", "owned_search_evidence", "market_authority_evidence", "conflicts", "signals", "open_evidence", "next_action"]
+  "return_fields": ["target_scope", "source_context", "evidence_manifest", "technical_evidence", "owned_search_evidence", "market_authority_evidence", "conflicts", "signals", "open_evidence", "next_action"]
 }
