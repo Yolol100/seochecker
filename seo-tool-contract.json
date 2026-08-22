@@ -1,6 +1,6 @@
 {
-  "contract_version": "2.0.0",
-  "updated": "2026-08-20",
+  "contract_version": "2.1.0",
+  "updated": "2026-08-22",
   "repository": "Yolol100/seochecker",
   "role": "reproducible-owned-site-seo-evidence",
   "workflows": [
@@ -18,8 +18,8 @@
       "input": {
         "url": "explicit public http/https URL",
         "gsc_property": "optional exact Search Console property",
-        "country_code": "optional ISO 3166-1 alpha-3",
-        "expected_lang": "optional HTML language expectation"
+        "country_code": "optional ISO 3166-1 alpha-3; consumers must not infer a market from repository defaults",
+        "expected_lang": "optional HTML language expectation; consumers must not infer a language from repository defaults"
       },
       "output_artifact": "seo-diagnostic-report",
       "capabilities": ["technical-crawl", "owned-search-diagnostic", "backlink-diagnostic", "combined-diagnostic"],
@@ -39,8 +39,18 @@
     "ahrefs-first-seen-is-discovery-not-link-creation-time",
     "missing-credentials-become-open-evidence",
     "manual-actions-and-security-issues-remain-manual-gsc-ui-checks",
-    "no-client-specific-hardcoding-on-default-branch"
+    "no-client-specific-hardcoding-on-default-branch",
+    "x-robots-tag-is-part-of-indexability-evidence",
+    "title-and-meta-description-character-counts-are-measurements-not-google-indexability-limits",
+    "multiple-h1-elements-are-not-a-google-indexability-blocker",
+    "project-source-set-version-is-caller-provenance-and-must-not-be-hardcoded-on-main"
   ],
+  "consumer_contract": {
+    "owner": "seo",
+    "project_id": "project-seo",
+    "interpretation": "SEO Skill owns interpretation and combines repository evidence with current Project SEO sources, GSC and Ahrefs without merging source roles.",
+    "source_context": "When a source-bound request is used, preserve source_context.source_set_version in run reporting/evidence; repository main remains source-version agnostic."
+  },
   "runtime_gate": "require an actual workflow run plus logs/artifact before claiming execution evidence",
-  "return_fields": ["target_scope", "technical_evidence", "owned_search_evidence", "market_authority_evidence", "conflicts", "signals", "open_evidence", "next_action"]
+  "return_fields": ["target_scope", "source_context", "technical_evidence", "owned_search_evidence", "market_authority_evidence", "conflicts", "signals", "open_evidence", "next_action"]
 }
