@@ -14,7 +14,7 @@ try:
 except ImportError:
     from validate_target import validate_target
 
-USER_AGENT = "WebactueelSEOChecker/1.1 (+https://github.com/Yolol100/seochecker)"
+USER_AGENT = "WebactueelSEOChecker/1.2 (+https://github.com/Yolol100/seochecker)"
 
 
 class PublicOnlyRedirectHandler(HTTPRedirectHandler):
@@ -110,6 +110,26 @@ def _normalize_url(value):
     return parsed._replace(scheme=parsed.scheme.lower(), netloc=parsed.netloc.lower(), path=path, fragment="").geturl()
 
 
+def _valid_hreflang(value):
+    if value == "x-default":
+        return True
+    return bool(re.fullmatch(r"[a-z]{2}(?:-[a-z]{4})?(?:-[a-z]{2})?", value, re.I))
+
+
+def _x_robots_has_noindex(values):
+    for value in values or []:
+        raw = str(value).strip().lower()
+        if not raw:
+            continue
+        if raw.startswith("googlebot:"):
+            raw = raw.split(":", 1)[1]
+        elif re.match(r"^[a-z0-9_-]+\s*:", raw):
+            continue
+        if re.search(r"(?:^|[,\s])noindex(?:$|[,\s])", raw):
+            return True
+    return False
+
+
 def analyze_html(html, base_url):
     parser = PageParser()
     parser.feed(html)
@@ -137,18 +157,12 @@ def analyze_html(html, base_url):
         blockers.append("meta robots/googlebot bevat noindex")
     if not title:
         warnings.append("title ontbreekt")
-    if len(title) > 65:
-        warnings.append("title is langer dan 65 tekens")
     if not descriptions:
         warnings.append("meta description ontbreekt")
     elif len(descriptions) > 1:
         warnings.append("meerdere meta descriptions gevonden")
-    if descriptions and len(descriptions[0]) > 160:
-        warnings.append("meta description is langer dan 160 tekens")
     if len(parser.h1s) == 0:
         warnings.append("H1 ontbreekt")
-    elif len(parser.h1s) > 1:
-        warnings.append("meerdere H1's gevonden")
     if len(canonical) == 0:
         warnings.append("canonical ontbreekt")
     elif len(canonical) > 1:
@@ -159,23 +173,29 @@ def analyze_html(html, base_url):
         warnings.append("ongeldige JSON-LD gevonden")
     langs = [item["lang"] for item in hreflang]
     duplicates = sorted({lang for lang in langs if langs.count(lang) > 1})
-    invalid = sorted({lang for lang in langs if lang != "x-default" and not re.fullmatch(r"[a-z]{2,3}(?:-[a-z]{2}|-[a-z]{4})?", lang, re.I)})
+    invalid = sorted({lang for lang in langs if not _valid_hreflang(lang)})
+    hreflang_self_reference = not hreflang or any(_normalize_url(item["url"]) == _normalize_url(base_url) for item in hreflang)
     if duplicates:
         warnings.append("dubbele hreflang-taalcodes gevonden")
     if invalid:
         warnings.append("ongeldige of niet-herkende hreflang-taalcodes gevonden")
+    if hreflang and not hreflang_self_reference:
+        warnings.append("hreflang mist zelfverwijzing voor de huidige URL")
     return {
         "title": title,
         "title_length": len(title),
         "meta_descriptions": descriptions,
+        "meta_description_lengths": [len(value) for value in descriptions],
         "robots": robots,
         "googlebot": googlebot,
         "h1": parser.h1s,
+        "h1_count": len(parser.h1s),
         "canonical": canonical,
         "canonical_self_referencing": len(canonical) == 1 and _normalize_url(canonical[0]) == _normalize_url(base_url),
         "hreflang": hreflang,
         "hreflang_duplicate_languages": duplicates,
         "hreflang_invalid_languages": invalid,
+        "hreflang_self_reference": hreflang_self_reference,
         "jsonld_blocks": len(parser.jsonld_raw),
         "jsonld_types": sorted(jsonld_types),
         "jsonld_errors": jsonld_errors,
@@ -197,9 +217,11 @@ def fetch(url, timeout=20):
 def probe(url, timeout=10):
     try:
         status, final_url, headers, body = fetch(url, timeout)
-        return {"url": url, "status": status, "final_url": final_url, "content_type": headers.get("Content-Type", ""), "body": body}
+        x_robots = headers.get_all("X-Robots-Tag") or []
+        return {"url": url, "status": status, "final_url": final_url, "content_type": headers.get("Content-Type", ""), "x_robots_tag": [value.strip() for value in x_robots if value and value.strip()], "body": body}
     except HTTPError as exc:
-        return {"url": url, "status": exc.code, "final_url": exc.geturl(), "error": str(exc)}
+        x_robots = exc.headers.get_all("X-Robots-Tag") if exc.headers else []
+        return {"url": url, "status": exc.code, "final_url": exc.geturl(), "content_type": exc.headers.get("Content-Type", "") if exc.headers else "", "x_robots_tag": [value.strip() for value in (x_robots or []) if value and value.strip()], "error": str(exc)}
     except (URLError, TimeoutError, OSError, ValueError) as exc:
         return {"url": url, "status": None, "error": str(exc)}
 
@@ -212,7 +234,15 @@ def run(url):
         result["warnings"] = []
         return result
     final_url = page["final_url"]
-    result.update(analyze_html(page.get("body", ""), final_url))
+    content_type = page.get("content_type", "").lower()
+    is_html = not content_type or "text/html" in content_type or "application/xhtml+xml" in content_type
+    result["content_type_is_html"] = is_html
+    if is_html:
+        result.update(analyze_html(page.get("body", ""), final_url))
+    else:
+        result.update({"indexability_blockers": [], "warnings": ["response is geen HTML; HTML-specifieke checks zijn overgeslagen"]})
+    if _x_robots_has_noindex(page.get("x_robots_tag")):
+        result.setdefault("indexability_blockers", []).append("X-Robots-Tag bevat noindex voor Googlebot")
     origin = f"{urlparse(final_url).scheme}://{urlparse(final_url).netloc}"
     robots_url = urljoin(origin + "/", "robots.txt")
     robots = probe(robots_url)
@@ -226,11 +256,17 @@ def run(url):
                     sitemap_urls.append(value)
     if not sitemap_urls:
         sitemap_urls = [urljoin(origin + "/", "sitemap.xml")]
-    sitemap = probe(sitemap_urls[0])
-    sitemap.pop("body", None)
+    sitemap_urls = list(dict.fromkeys(sitemap_urls))
+    sitemap_probes = []
+    for candidate in sitemap_urls[:10]:
+        sitemap = probe(candidate)
+        sitemap.pop("body", None)
+        sitemap_probes.append(sitemap)
     result["robots_txt"] = robots
     result["sitemap_candidates"] = sitemap_urls
-    result["sitemap_probe"] = sitemap
+    result["sitemap_probes"] = sitemap_probes
+    result["sitemap_probe"] = sitemap_probes[0] if sitemap_probes else None
+    result["sitemap_probe_truncated"] = len(sitemap_urls) > len(sitemap_probes)
     return result
 
 
