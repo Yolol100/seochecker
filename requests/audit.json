@@ -1,0 +1,17 @@
+{
+  "enabled": true,
+  "request_id": "doctorcura-20260822-fullscan",
+  "owner": "seo",
+  "project_id": "project-seo",
+  "for": "Doctorcura website SEO audit",
+  "task": "Run a current full technical SEO audit for https://doctorcura.com/",
+  "why": "Establish a production technical baseline to combine with first-party Google Search Console data and Ahrefs market/authority data for the user-requested whole-site scan.",
+  "trigger_when": "This enabled request is pushed to the dedicated runtime branch.",
+  "do_not_trigger_when": "The target URL or Project SEO source context no longer matches this request.",
+  "requested_by": "user",
+  "url": "https://doctorcura.com/",
+  "source_context": {
+    "project_id": "project-seo",
+    "source_set_version": "2.6.9-media-publication-safety"
+  }
+}
