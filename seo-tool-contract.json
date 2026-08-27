@@ -1,6 +1,6 @@
 {
-  "contract_version": "2.2.0",
-  "updated": "2026-08-22",
+  "contract_version": "2.3.0",
+  "updated": "2026-08-27",
   "repository": "Yolol100/seochecker",
   "role": "reproducible-owned-site-seo-evidence",
   "workflows": [
@@ -31,6 +31,17 @@
       }
     }
   ],
+  "standalone_tools": [
+    {
+      "tool": "scripts/verify_page_expectations.py",
+      "capability": "post-publication-expectation-verification",
+      "input": "runtime JSON expectation contract for one or more explicit public URLs",
+      "checks": ["status", "final-url", "indexability", "title", "meta-description", "h1", "canonical", "required-internal-links"],
+      "output": "JSON pass/fail report",
+      "credentials": "none",
+      "persistence": "customer/project-specific expectation payloads must not be hardcoded on the default branch"
+    }
+  ],
   "precedence": {
     "google_index_and_owned_search_performance": "google-search-console",
     "current_technical_state": "seochecker-or-direct-live-evidence",
@@ -47,15 +58,17 @@
     "multiple-h1-elements-are-not-a-google-indexability-blocker",
     "project-source-set-version-is-caller-provenance-and-must-not-be-hardcoded-on-main",
     "lighthouse-summary-is-lab-evidence-not-field-data",
-    "evidence-manifest-is-provenance-and-inventory-not-project-policy"
+    "evidence-manifest-is-provenance-and-inventory-not-project-policy",
+    "post-publication-expectation-verification-proves-only-the-explicit-properties-observed-during-that-run"
   ],
   "consumer_contract": {
     "owner": "seo",
     "project_id": "project-seo",
     "interpretation": "SEO Skill owns interpretation and combines repository evidence with current Project SEO sources, GSC and Ahrefs without merging source roles.",
     "source_context": "When a source-bound request is used, preserve source_context.source_set_version in run reporting/evidence; repository main remains source-version agnostic.",
-    "read_order": "For SEO Audit artifacts read reports/evidence-manifest.json first, then open only the evidence files needed for the decision."
+    "read_order": "For SEO Audit artifacts read reports/evidence-manifest.json first, then open only the evidence files needed for the decision.",
+    "post_publication": "Use the expectation verifier only after an expected live state is defined. A passing result supports only those explicitly checked live properties."
   },
-  "runtime_gate": "require an actual workflow run plus logs/artifact before claiming execution evidence",
+  "runtime_gate": "require an actual workflow/tool run plus logs/report before claiming execution evidence",
   "return_fields": ["target_scope", "source_context", "evidence_manifest", "technical_evidence", "owned_search_evidence", "market_authority_evidence", "conflicts", "signals", "open_evidence", "next_action"]
 }

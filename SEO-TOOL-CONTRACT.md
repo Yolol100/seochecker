@@ -63,6 +63,20 @@ Ahrefs-data is third-party diagnostiek en wordt nooit vertaald naar een Google-p
 - Artifact: `seo-diagnostic-report`
 - Capabilities: `technical-crawl`, `owned-search-diagnostic`, `backlink-diagnostic`, `combined-diagnostic`
 
+## Standalone post-publication verifier
+
+`scripts/verify_page_expectations.py` controleert na publicatie alleen expliciet opgegeven verwachtingen tegen de actuele publieke HTTP-respons. Gebruik dit wanneer een wijziging van `draft` of `staging` naar live gaat en de SEO-eigenaar wil bewijzen dat releasekritieke metadata en links werkelijk zijn gerenderd.
+
+Ondersteunde verwachtingen:
+
+- HTTP-status en uiteindelijke URL
+- indexability via meta robots, Googlebot en `X-Robots-Tag`
+- title, meta description en H1 bevatten verwachte tekst
+- canonical komt overeen met de verwachting
+- vereiste interne links staan als echte links in de respons-HTML
+
+De input is runtime/projectspecifiek en hoort niet permanent op de default branch. Een PASS ondersteunt alleen de expliciet gecontroleerde properties van die run; het bewijst geen ranking, verkeer, conversie, toekomstige indexatie of plugin-UI-score. Zie `docs/POST-PUBLICATION-EXPECTATIONS.md`.
+
 ## Evidence precedence
 
 1. Google's indexstatus en eigen Google Search performance: **Search Console**.
