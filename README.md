@@ -1,5 +1,34 @@
 # SEO Checker
 
+> **Portfoliostatus:** Flagship · actieve audittool · technische SEO-evidence
+
+## In één oogopslag
+
+SEO Checker maakt reproduceerbare technische SEO-audits voor publieke websites. De tool houdt live technische feiten, Search Console-eigenaarsdata en externe Ahrefs-context expliciet uit elkaar.
+
+| Onderdeel | Bewijs |
+| --- | --- |
+| Doelgroep | SEO-specialisten, developers en website-eigenaren |
+| Stack | Python, GitHub Actions, SiteOne, Lighthouse CI en Nu HTML Checker |
+| Accountloos | HTTP, metadata, robots, sitemap, structured data, crawl en labmetingen |
+| Optioneel | Search Console en Ahrefs via GitHub Actions secrets |
+| Resultaat | Run-scoped JSON-, Markdown-, HTML- en Lighthouse-artifacts zonder klantdata op `main` |
+
+## Snel starten
+
+1. Open **Actions → SEO Audit → Run workflow**.
+2. Voer één publieke HTTPS-URL in.
+3. Download na afloop `seo-audit-report`.
+4. Gebruik **Full SEO Diagnostic** ook zonder integraties voor de gecombineerde accountloze diagnose; GSC en Ahrefs zijn afzonderlijk optioneel en leveren `not_configured` wanneer credentials ontbreken.
+
+## Bewijsstroom
+
+```text
+publieke URL → live technische checks → crawl/lab/validatie
+                                 ↘ optionele GSC/Ahrefs-context
+                                  → run-scoped evidence-first rapport
+```
+
 Herbruikbare SEO-audittool voor publieke websites. De repository heeft twee workflows:
 
 - **SEO Audit** — volledig accountloos: technische live-checks, SiteOne crawl, Lighthouse CI en HTML-validatie.
@@ -146,3 +175,11 @@ python3 -m py_compile scripts/*.py tests/*.py
 ```
 
 Zie `SEO-TOOL-CONTRACT.md` en `seo-tool-contract.json` voor de formele bron- en capabilitygrenzen.
+
+## Projectstatus, roadmap en support
+
+SEO Checker wordt actief ontwikkeld als begrensde evidence-tool. Nieuwe databronnen moeten een expliciete bronrol, fail-closed configuratie en testbare bewijsgrens krijgen. Meld technische defecten via [GitHub Issues](https://github.com/Yolol100/seochecker/issues) zonder URL-exports, credentials of klantdata te publiceren.
+
+## Licentie
+
+Deze repository bevat momenteel geen open-sourcelicentie. Hergebruik, distributie of afgeleide werken zijn niet toegestaan zonder expliciete toestemming van de rechthebbende.
