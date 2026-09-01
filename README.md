@@ -19,7 +19,7 @@ SEO Checker maakt reproduceerbare technische SEO-audits voor publieke websites. 
 1. Open **Actions → SEO Audit → Run workflow**.
 2. Voer één publieke HTTPS-URL in.
 3. Download na afloop `seo-audit-report`.
-4. Gebruik **Full SEO Diagnostic** alleen wanneer de optionele integraties correct zijn ingesteld.
+4. Gebruik **Full SEO Diagnostic** ook zonder integraties voor de gecombineerde accountloze diagnose; GSC en Ahrefs zijn afzonderlijk optioneel en leveren `not_configured` wanneer credentials ontbreken.
 
 ## Bewijsstroom
 
