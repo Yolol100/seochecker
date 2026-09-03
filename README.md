@@ -38,13 +38,30 @@ Lees na iedere run eerst `reports/evidence-manifest.json`.
 
 ## Post-publication check
 
-`scripts/verify_page_expectations.py` vergelijkt een gerenderde live pagina met expliciete runtime-verwachtingen voor onder meer HTTP-status, final URL, indexability, title, meta description, H1, canonical en vereiste interne links.
+`scripts/verify_page_expectations.py` vergelijkt de live HTTP-response/HTML met expliciete runtime-verwachtingen. Het script controleert geen JavaScript-browser-DOM.
 
-```bash
-python3 scripts/verify_page_expectations.py expectations.json --output reports/page-expectations.json
+Ondersteunde verwachtingen zijn `status`, `indexable`, `title_contains`, `meta_contains`, `h1_contains`, `canonical_equals`, `final_url_equals` en `required_internal_links`.
+
+Voorbeeld:
+
+```json
+{
+  "url": "https://example.nl/dienst/",
+  "expected": {
+    "status": 200,
+    "indexable": true,
+    "title_contains": "Dienst",
+    "canonical_equals": "/dienst/",
+    "required_internal_links": ["/contact/"]
+  }
+}
 ```
 
-Commit geen klant-/URL-specifieke expectationbestanden op `main`.
+```bash
+python3 scripts/verify_page_expectations.py expectations.json --report reports/page-expectations.json
+```
+
+Commit geen klant-/URL-specifieke expectationbestanden op `main`. Een geslaagde check bewijst alleen de expliciet gecontroleerde live HTTP/HTML-eigenschappen, niet ranking, verkeer, conversies of JavaScript-gerenderde toestand.
 
 ## Wat bewust niet in deze repo zit
 
