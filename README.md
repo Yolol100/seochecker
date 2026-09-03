@@ -190,7 +190,7 @@ SEO Checker wordt actief ontwikkeld als begrensde evidence-tool. Nieuwe databron
 
 ## About the developer
 
-I am **Andrew Baeten**, a Senior WordPress Developer & Web Designer with 10+ years of experience across 70+ WordPress projects. My work combines WordPress development with UX, performance, technical SEO and repeatable QA/automation workflows.
+I am **Andrew Baeten**, a Senior WordPress Developer & Web Designer with 10+ years of experience across **90+ WordPress projects**. I currently manage and regularly update **120+ websites and webshops**. My work combines WordPress development with UX, performance, technical SEO and repeatable QA/automation workflows.
 
 [Portfolio](https://andrewbaeten.nl) · [LinkedIn](https://www.linkedin.com/in/andrew-baeten-305a1478/) · [Email](mailto:info@andrewbaeten.nl)
 
