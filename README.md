@@ -1,25 +1,33 @@
-# SEO Checker
+# SEO Checker — Reproducible Technical SEO Audits
 
-> **Portfoliostatus:** Flagship · actieve audittool · technische SEO-evidence
+> **Portfolio flagship · Python · GitHub Actions · SiteOne · Lighthouse CI · HTML validation**
 
-## In één oogopslag
+SEO Checker turns a public website URL into a repeatable technical SEO evidence package. It separates live technical facts from optional Google Search Console and Ahrefs context so conclusions stay traceable to the right source.
 
-SEO Checker maakt reproduceerbare technische SEO-audits voor publieke websites. De tool houdt live technische feiten, Search Console-eigenaarsdata en externe Ahrefs-context expliciet uit elkaar.
+**Built by:** [Andrew Baeten](https://github.com/Yolol100) · [Portfolio](https://andrewbaeten.nl)
 
-| Onderdeel | Bewijs |
+## What problem it solves
+
+Technical SEO reviews are often spread across manual browser checks, crawlers, Lighthouse, Search Console and third-party tools. SEO Checker combines those checks into a repeatable workflow while keeping account-owned data, third-party context and live website evidence clearly separated.
+
+## Portfolio snapshot
+
+| Area | What it demonstrates |
 | --- | --- |
-| Doelgroep | SEO-specialisten, developers en website-eigenaren |
-| Stack | Python, GitHub Actions, SiteOne, Lighthouse CI en Nu HTML Checker |
-| Accountloos | HTTP, metadata, robots, sitemap, structured data, crawl en labmetingen |
-| Optioneel | Search Console en Ahrefs via GitHub Actions secrets |
-| Resultaat | Run-scoped JSON-, Markdown-, HTML- en Lighthouse-artifacts zonder klantdata op `main` |
+| Technical SEO | HTTP, redirects, metadata, robots, sitemap, canonical, hreflang and structured data checks |
+| Crawl & validation | SiteOne crawl output and Nu HTML Checker validation |
+| Performance | Lighthouse CI lab measurements |
+| Search data | Optional Google Search Console integration |
+| External SEO context | Optional Ahrefs backlink/ranking context |
+| Engineering | Python, GitHub Actions, JSON/Markdown/HTML artifacts and source-aware reporting |
+| Safety | Public-target restrictions, secrets separation and no client/run data committed to `main` |
 
-## Snel starten
+## Quick start
 
 1. Open **Actions → SEO Audit → Run workflow**.
-2. Voer één publieke HTTPS-URL in.
-3. Download na afloop `seo-audit-report`.
-4. Gebruik **Full SEO Diagnostic** ook zonder integraties voor de gecombineerde accountloze diagnose; GSC en Ahrefs zijn afzonderlijk optioneel en leveren `not_configured` wanneer credentials ontbreken.
+2. Enter a public HTTPS URL.
+3. Download the `seo-audit-report` artifact.
+4. Use **Full SEO Diagnostic** when optional Search Console/Ahrefs context is configured.
 
 ## Bewijsstroom
 
@@ -179,6 +187,12 @@ Zie `SEO-TOOL-CONTRACT.md` en `seo-tool-contract.json` voor de formele bron- en 
 ## Projectstatus, roadmap en support
 
 SEO Checker wordt actief ontwikkeld als begrensde evidence-tool. Nieuwe databronnen moeten een expliciete bronrol, fail-closed configuratie en testbare bewijsgrens krijgen. Meld technische defecten via [GitHub Issues](https://github.com/Yolol100/seochecker/issues) zonder URL-exports, credentials of klantdata te publiceren.
+
+## About the developer
+
+I am **Andrew Baeten**, a Senior WordPress Developer & Web Designer with 10+ years of experience across 70+ WordPress projects. My work combines WordPress development with UX, performance, technical SEO and repeatable QA/automation workflows.
+
+[Portfolio](https://andrewbaeten.nl) · [LinkedIn](https://www.linkedin.com/in/andrew-baeten-305a1478/) · [Email](mailto:info@andrewbaeten.nl)
 
 ## Licentie
 
