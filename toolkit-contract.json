@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.2",
+  "schema_version": "1.3",
   "owner_skill": "seo",
   "project_id": "project-seo",
   "repository": "Yolol100/seochecker",
@@ -22,9 +22,10 @@
     {"tool":"evidence-manifest","path":".github/workflows/seo-audit.yml","contains":"build_evidence_manifest.py"}
   ],
   "boundaries": [
-    "The registered core toolkit remains accountless and API-key-free.",
-    "Full SEO Diagnostic may optionally consume GSC/Ahrefs through separately configured secrets.",
-    "Tool findings are diagnostics; SEO owns interpretation.",
-    "The evidence manifest is provenance and artifact inventory, not a replacement for Project SEO source truth."
+    "The registered toolkit is accountless and API-key-free.",
+    "GSC, Ahrefs, analytics and other external datasets remain outside this repository and keep their own source semantics.",
+    "Tool findings are diagnostics; SEO owns interpretation and prioritization.",
+    "The evidence manifest records provenance and artifacts; it does not replace Project SEO source truth.",
+    "Client, target and run-specific truth belongs in runtime input or artifacts, not permanently on main."
   ]
 }
