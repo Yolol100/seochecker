@@ -8,24 +8,96 @@
   "requires_api_key": false,
   "requires_mcp": false,
   "tools": [
-    {"id":"core-indexability","version":"repo","trigger_when":"every technical audit","outputs":["reports/basic-seo.json"]},
-    {"id":"siteone","version":"2.5.1","trigger_when":"every technical audit","outputs":["reports/siteone.json","reports/siteone.html"]},
-    {"id":"lighthouse-ci","version":"0.15.1","trigger_when":"every technical audit","outputs":["reports/lighthouse-summary.json",".lighthouseci/"]},
-    {"id":"nu-html-checker","version":"asset-515207969","sha256":"c70279e260e5f4f9e95b3890ef6c9548f90ebdaec2a75219ec41694ab6241e34","trigger_when":"every technical audit","outputs":["reports/w3c-nu.json"]},
-    {"id":"evidence-manifest","version":"1.0","trigger_when":"every technical audit","outputs":["reports/evidence-manifest.json"]}
+    {
+      "id": "core-indexability",
+      "version": "repo",
+      "trigger_when": "every technical audit",
+      "outputs": [
+        "reports/basic-seo.json"
+      ]
+    },
+    {
+      "id": "siteone",
+      "version": "2.5.1",
+      "trigger_when": "every technical audit",
+      "outputs": [
+        "reports/siteone.json",
+        "reports/siteone.html"
+      ]
+    },
+    {
+      "id": "lighthouse-ci",
+      "version": "0.15.1",
+      "trigger_when": "every technical audit",
+      "outputs": [
+        "reports/lighthouse-summary.json",
+        ".lighthouseci/"
+      ]
+    },
+    {
+      "id": "nu-html-checker",
+      "version": "asset-515207969",
+      "sha256": "c70279e260e5f4f9e95b3890ef6c9548f90ebdaec2a75219ec41694ab6241e34",
+      "trigger_when": "every technical audit",
+      "outputs": [
+        "reports/w3c-nu.json"
+      ]
+    },
+    {
+      "id": "evidence-manifest",
+      "version": "1.0",
+      "trigger_when": "every technical audit",
+      "outputs": [
+        "reports/evidence-manifest.json"
+      ]
+    },
+    {
+      "id": "page-expectations",
+      "version": "2",
+      "trigger_when": "explicit post-publication expectations are supplied",
+      "outputs": [
+        "caller-selected JSON report"
+      ]
+    }
   ],
   "usage_assertions": [
-    {"tool":"core-indexability","path":".github/workflows/seo-audit.yml","contains":"seo_basic_check.py"},
-    {"tool":"siteone","path":".github/workflows/seo-audit.yml","contains":"siteone-crawler"},
-    {"tool":"lighthouse-ci","path":".github/workflows/seo-audit.yml","contains":"lighthouse_summary.py"},
-    {"tool":"nu-html-checker","path":".github/workflows/seo-audit.yml","contains":"VNU_ASSET_ID"},
-    {"tool":"evidence-manifest","path":".github/workflows/seo-audit.yml","contains":"build_evidence_manifest.py"}
+    {
+      "tool": "core-indexability",
+      "path": ".github/workflows/seo-audit.yml",
+      "contains": "seo_basic_check.py"
+    },
+    {
+      "tool": "siteone",
+      "path": ".github/workflows/seo-audit.yml",
+      "contains": "siteone-crawler"
+    },
+    {
+      "tool": "lighthouse-ci",
+      "path": ".github/workflows/seo-audit.yml",
+      "contains": "lighthouse_summary.py"
+    },
+    {
+      "tool": "nu-html-checker",
+      "path": ".github/workflows/seo-audit.yml",
+      "contains": "VNU_ASSET_ID"
+    },
+    {
+      "tool": "evidence-manifest",
+      "path": ".github/workflows/seo-audit.yml",
+      "contains": "build_evidence_manifest.py"
+    },
+    {
+      "tool": "page-expectations",
+      "path": "scripts/verify_page_expectations.py",
+      "contains": "def load_pages"
+    }
   ],
   "boundaries": [
     "The registered toolkit is accountless and API-key-free.",
     "GSC, Ahrefs, analytics and other external datasets remain outside this repository and keep their own source semantics.",
     "Tool findings are diagnostics; SEO owns interpretation and prioritization.",
     "The evidence manifest records provenance and artifacts; it does not replace Project SEO source truth.",
-    "Client, target and run-specific truth belongs in runtime input or artifacts, not permanently on main."
+    "Client, target and run-specific truth belongs in runtime input or artifacts, not permanently on main.",
+    "Post-publication checks require non-empty typed expectations and preserve URL resource identity; HTTP response HTML is not a JavaScript DOM."
   ]
 }

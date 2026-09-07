@@ -44,10 +44,24 @@ class VerifyPageExpectationsTests(unittest.TestCase):
         parsed = mod.parse_html("<html><head><title>X</title></head><body><h1>X</h1></body></html>", "https://example.nl/", {"x-robots-tag": "noindex"})
         self.assertFalse(parsed["indexable"])
 
-    def test_normalizes_www_and_trailing_slash_for_links(self):
+    def test_does_not_invent_www_or_trailing_slash_equivalence(self):
         obs = self.observation()
         expected = {"required_internal_links": ["https://www.example.nl/brandwacht"]}
-        self.assertEqual(mod.verify_observation(obs, expected, "https://example.nl/brandwacht-amsterdam/"), [])
+        self.assertTrue(mod.verify_observation(obs, expected, "https://example.nl/brandwacht-amsterdam/"))
+
+    def test_exact_url_expectations_preserve_resource_identity(self):
+        wanted = "https://example.nl/page/?id=1"
+        for actual in ["http://example.nl/page/?id=1", "https://www.example.nl/page/?id=1", "https://example.nl:8443/page/?id=1", "https://example.nl/page?id=1", "https://example.nl/page/?id=2", "https://example.nl//page/?id=1"]:
+            for field, key in [("canonical_equals", "canonical"), ("final_url_equals", "final_url")]:
+                with self.subTest(actual=actual, field=field):
+                    self.assertTrue(mod.verify_observation({key: actual}, {field: wanted}, wanted))
+        self.assertEqual(mod.normalized_url_key(wanted), mod.normalized_url_key("https://EXAMPLE.nl:443/page/?id=1#section"))
+
+    def test_empty_or_invalid_expectations_cannot_pass(self):
+        for payload in [{"pages": []}, {"pages": None}, {"pages": [None]}, {"url": "https://example.nl", "expected": {}}, {"url": "https://example.nl", "expected": {"typo": True}}, {"url": "https://example.nl", "expected": {"title_contains": ""}}, {"url": "https://example.nl", "expected": {"indexable": "true"}}, {"url": "https://example.nl", "expected": {"required_internal_links": []}}]:
+            with self.subTest(payload=payload), self.assertRaises(ValueError):
+                mod.load_pages(payload)
+        self.assertEqual(len(mod.load_pages({"url": "https://example.nl", "expected": {"status": 200}})), 1)
 
 
 if __name__ == "__main__":

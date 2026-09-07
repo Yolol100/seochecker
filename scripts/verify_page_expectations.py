@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify post-publication expectations against a public rendered HTML page.
+"""Verify post-publication expectations against a public HTTP HTML response.
 
 Input is a JSON file with either one object or {"pages": [...]}.
 This tool proves only the requested live page properties observed during the run.
@@ -63,15 +63,12 @@ def norm_text(value: str) -> str:
     return re.sub(r"\s+", " ", value or "").strip()
 
 
-def normalized_url_key(url: str) -> tuple[str, str]:
+def normalized_url_key(url: str) -> tuple:
     p = urlsplit(url)
-    host = (p.hostname or "").lower()
-    if host.startswith("www."):
-        host = host[4:]
-    path = re.sub(r"/+", "/", p.path or "/")
-    if path != "/":
-        path = path.rstrip("/")
-    return host, path
+    # Preserve resource identity; www, protocol, query, port and slash changes
+    # require explicit expectations. Only default ports and empty root normalize.
+    port = p.port or {"http": 80, "https": 443}.get(p.scheme)
+    return p.scheme.lower(), (p.hostname or "").lower(), port, p.path or "/", p.query
 
 
 def public_http_url(url: str) -> bool:
@@ -164,11 +161,30 @@ def fetch_page(url: str, timeout: int = 20) -> dict:
 
 
 def load_pages(payload: object) -> list[dict]:
-    if isinstance(payload, dict) and isinstance(payload.get("pages"), list):
-        return payload["pages"]
-    if isinstance(payload, dict):
-        return [payload]
-    raise ValueError("input must be an object or an object with a pages array")
+    if not isinstance(payload, dict):
+        raise ValueError("input must be an object or an object with a pages array")
+    pages = payload.get("pages") if "pages" in payload else [payload]
+    if not isinstance(pages, list) or not pages:
+        raise ValueError("pages must be a non-empty array")
+    allowed = {"status", "indexable", "title_contains", "meta_contains", "h1_contains", "canonical_equals", "final_url_equals", "required_internal_links"}
+    for page in pages:
+        if not isinstance(page, dict) or not isinstance(page.get("url"), str) or not page["url"].strip():
+            raise ValueError("every page requires a URL")
+        expected = page.get("expected")
+        if not isinstance(expected, dict) or not expected or set(expected) - allowed:
+            raise ValueError("every page requires non-empty supported expectations")
+        for key, value in expected.items():
+            if key == "status":
+                valid = type(value) is int and 100 <= value <= 599
+            elif key == "indexable":
+                valid = type(value) is bool
+            elif key == "required_internal_links":
+                valid = isinstance(value, list) and bool(value) and all(isinstance(v, str) and v.strip() for v in value)
+            else:
+                valid = isinstance(value, str) and bool(value.strip())
+            if not valid:
+                raise ValueError(f"invalid expectation: {key}")
+    return pages
 
 
 def main() -> None:
