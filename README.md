@@ -99,3 +99,5 @@ Andrew Baeten is Senior WordPress Developer & Web Designer met 10+ jaar ervaring
 ## Licentie
 
 Deze repository bevat momenteel geen open-sourcelicentie. Hergebruik of distributie vereist expliciete toestemming van de rechthebbende.
+
+URL equality in post-publication checks preserves scheme, hostname (including www), non-default port, exact path and query. Only default ports, host case, empty root paths and fragments normalize. Empty pages or empty/unknown expectations are invalid input, never a successful check.
