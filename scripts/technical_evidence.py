@@ -51,7 +51,11 @@ def normalize_record(raw: dict) -> dict:
         "canonical": url_key(canonical) if canonical else None,
         "title": raw.get("title") or None,
         "h1": raw.get("h1") or [],
-        "hreflang": [{"lang": str(x.get("lang") or "").lower(), "url": url_key(x.get("url") or "")} for x in hreflang if isinstance(x, dict)],
+        "hreflang": [
+            {"lang": str(x.get("lang") or "").lower(), "url": url_key(x.get("url") or "")}
+            for x in hreflang
+            if isinstance(x, dict)
+        ],
         "blockers": blockers,
         "warnings": warnings,
         "observation_layer": raw.get("observation_layer") or "http_response_html",
@@ -74,6 +78,21 @@ def normalize_payload(payload) -> dict:
     return {"schema_version": "1.0", "records": records}
 
 
+def _canonical_cycle(start: str, by_url: dict[str, dict]) -> str | None:
+    """Return the repeated URL when a real canonical cycle exists; self canonicals terminate."""
+    seen = set()
+    current = start
+    while current in by_url:
+        if current in seen:
+            return current
+        seen.add(current)
+        nxt = by_url[current].get("canonical")
+        if not nxt or nxt == current:
+            return None
+        current = nxt
+    return None
+
+
 def validate_graph(normalized: dict, sitemap_urls=None) -> dict:
     records = normalized.get("records", [])
     by_url = {r["url"]: r for r in records if r.get("url")}
@@ -83,18 +102,9 @@ def validate_graph(normalized: dict, sitemap_urls=None) -> dict:
         url = r.get("url")
         canonical = r.get("canonical")
         if canonical:
-            seen = {url}
-            current = canonical
-            while current in by_url and by_url[current].get("canonical"):
-                if current in seen:
-                    issues.append({"type": "canonical_loop", "url": url, "target": current, "severity": "error"})
-                    break
-                seen.add(current)
-                nxt = by_url[current].get("canonical")
-                if nxt != current:
-                    current = nxt
-                else:
-                    break
+            cycle = _canonical_cycle(url, by_url)
+            if cycle:
+                issues.append({"type": "canonical_loop", "url": url, "target": cycle, "severity": "error"})
             if canonical in by_url:
                 target = by_url[canonical]
                 if target.get("status") != 200:
@@ -105,7 +115,13 @@ def validate_graph(normalized: dict, sitemap_urls=None) -> dict:
             target_url = alt.get("url")
             target = by_url.get(target_url)
             if not target:
-                issues.append({"type": "hreflang_target_not_observed", "url": url, "target": target_url, "lang": alt.get("lang"), "severity": "warning"})
+                issues.append({
+                    "type": "hreflang_target_not_observed",
+                    "url": url,
+                    "target": target_url,
+                    "lang": alt.get("lang"),
+                    "severity": "warning",
+                })
                 continue
             if target.get("status") != 200:
                 issues.append({"type": "hreflang_target_non_200", "url": url, "target": target_url, "severity": "error"})
@@ -115,14 +131,16 @@ def validate_graph(normalized: dict, sitemap_urls=None) -> dict:
             if not reciprocal:
                 issues.append({"type": "hreflang_return_link_missing", "url": url, "target": target_url, "severity": "error"})
 
+    sitemap_count = None
     if sitemap_urls is not None:
         sitemap = {url_key(x) for x in sitemap_urls if str(x).strip()}
+        sitemap_count = len(sitemap)
         crawled = set(by_url)
-        for url in sorted(sitemap):
-            r = by_url.get(url)
-            if r is None:
-                issues.append({"type": "sitemap_url_not_observed", "url": url, "severity": "warning"})
-            elif r.get("status") != 200:
+        # A bounded runtime URL set is not a full-site crawl. Only assert sitemap health for
+        # URLs that were actually observed; do not turn unobserved sitemap URLs into false issues.
+        for url in sorted(sitemap & crawled):
+            r = by_url[url]
+            if r.get("status") != 200:
                 issues.append({"type": "sitemap_url_non_200", "url": url, "severity": "error"})
             elif not r.get("indexable"):
                 issues.append({"type": "sitemap_url_not_indexable", "url": url, "severity": "error"})
@@ -130,9 +148,19 @@ def validate_graph(normalized: dict, sitemap_urls=None) -> dict:
                 issues.append({"type": "sitemap_url_canonical_mismatch", "url": url, "target": r.get("canonical"), "severity": "warning"})
         for url in sorted(crawled - sitemap):
             if by_url[url].get("indexable"):
-                issues.append({"type": "indexable_url_missing_from_sitemap", "url": url, "severity": "warning"})
+                issues.append({"type": "indexable_observed_url_missing_from_sitemap", "url": url, "severity": "warning"})
 
-    return {"schema_version": "1.0", "issue_count": len(issues), "issues": issues}
+    return {
+        "schema_version": "1.0",
+        "observed_url_count": len(by_url),
+        "sitemap_url_count": sitemap_count,
+        "issue_count": len(issues),
+        "issues": issues,
+        "limitations": [
+            "Sitemap reconciliation is scoped to observed runtime URLs unless a caller explicitly supplies a complete observed crawl.",
+            "hreflang targets outside the observed URL set remain open evidence, not proven failures.",
+        ],
+    }
 
 
 def diff_runs(before: dict, after: dict) -> dict:
@@ -165,7 +193,8 @@ def read_json(path):
 
 
 def write_json(path, payload):
-    p = Path(path); p.parent.mkdir(parents=True, exist_ok=True)
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps(payload, indent=2, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
 
 
@@ -173,13 +202,18 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__)
     sub = ap.add_subparsers(dest="command", required=True)
     p = sub.add_parser("normalize")
-    p.add_argument("--input", required=True); p.add_argument("--output", required=True)
-    p.add_argument("--sitemap-list"); p.add_argument("--graph-output")
+    p.add_argument("--input", required=True)
+    p.add_argument("--output", required=True)
+    p.add_argument("--sitemap-list")
+    p.add_argument("--graph-output")
     d = sub.add_parser("diff")
-    d.add_argument("--before", required=True); d.add_argument("--after", required=True); d.add_argument("--output", required=True)
+    d.add_argument("--before", required=True)
+    d.add_argument("--after", required=True)
+    d.add_argument("--output", required=True)
     args = ap.parse_args()
     if args.command == "normalize":
-        normalized = normalize_payload(read_json(args.input)); write_json(args.output, normalized)
+        normalized = normalize_payload(read_json(args.input))
+        write_json(args.output, normalized)
         if args.graph_output:
             sitemap = Path(args.sitemap_list).read_text(encoding="utf-8").splitlines() if args.sitemap_list else None
             write_json(args.graph_output, validate_graph(normalized, sitemap))
