@@ -7,17 +7,26 @@ import gzip
 import json
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from validate_target import validate_target
 
 USER_AGENT = "WebactueelSEOChecker/1.3 (+https://github.com/Yolol100/seochecker)"
 
 
+class PublicOnlyRedirectHandler(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        validate_target(newurl)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+_OPENER = build_opener(PublicOnlyRedirectHandler())
+
+
 def fetch_bytes(url: str, max_bytes: int) -> bytes:
     validate_target(url)
     req = Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/xml,text/xml,*/*;q=0.5"})
-    with urlopen(req, timeout=20) as resp:
+    with _OPENER.open(req, timeout=20) as resp:
         validate_target(resp.geturl())
         data = resp.read(max_bytes + 1)
         if len(data) > max_bytes:
@@ -90,7 +99,13 @@ def main() -> int:
     seeds = sitemap_seeds(payload)
     urls, errors = collect(seeds, args.max_sitemaps, args.max_urls, args.max_bytes)
     Path(args.output).write_text("".join(f"{u}\n" for u in urls), encoding="utf-8")
-    report = {"schema_version": "1.0", "seed_count": len(seeds), "url_count": len(urls), "errors": errors, "truncated": len(urls) >= args.max_urls}
+    report = {
+        "schema_version": "1.0",
+        "seed_count": len(seeds),
+        "url_count": len(urls),
+        "errors": errors,
+        "truncated": len(urls) >= args.max_urls,
+    }
     Path(args.report).write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     print(args.report)
     return 0 if seeds else 2
