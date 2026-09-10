@@ -10,13 +10,23 @@ on:
       - 'package-lock.json'
       - 'scripts/**'
       - 'tests/**'
+      - 'toolkit-contract.json'
       - '.github/workflows/seo-audit.yml'
   workflow_dispatch:
     inputs:
       url:
-        description: "Publieke URL die technisch gecontroleerd moet worden"
+        description: "Publieke basis-URL die technisch gecontroleerd moet worden"
         required: true
         type: string
+      url_list:
+        description: "Optioneel: extra publieke URL's, een per regel. Blijft runtime-input."
+        required: false
+        type: string
+      render_js:
+        description: "Voer daarnaast een SiteOne browser/rendered-DOM crawl uit"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -51,6 +61,8 @@ jobs:
       request_id: ${{ steps.resolve.outputs.request_id }}
       target_url: ${{ steps.resolve.outputs.target_url }}
       source_set_version: ${{ steps.resolve.outputs.source_set_version }}
+      url_list_b64: ${{ steps.resolve.outputs.url_list_b64 }}
+      render_js: ${{ steps.resolve.outputs.render_js }}
     steps:
       - name: Checkout request
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -59,6 +71,8 @@ jobs:
         shell: bash
         env:
           DISPATCH_URL: ${{ inputs.url }}
+          DISPATCH_URL_LIST: ${{ inputs.url_list }}
+          DISPATCH_RENDER_JS: ${{ inputs.render_js }}
         run: |
           node <<'NODE'
           const fs = require('fs');
@@ -66,13 +80,21 @@ jobs:
           const write = (k, v) => fs.appendFileSync(out, `${k}=${String(v)}\n`);
           const safeText = (v) => typeof v === 'string' && v.trim().length > 0 && !/[\r\n]/.test(v);
           const safeId = (v) => typeof v === 'string' && /^[A-Za-z0-9._-]{3,80}$/.test(v);
+          const publicUrl = (v) => { const u = new URL(v); if (!['http:', 'https:'].includes(u.protocol)) throw new Error('URL must be HTTP(S)'); return u.toString(); };
           let run = false;
           let requestId = 'none';
           let targetUrl = '';
           let sourceSetVersion = '';
+          let urls = [];
+          let renderJs = false;
           if (process.env.GITHUB_EVENT_NAME === 'workflow_dispatch') {
-            targetUrl = process.env.DISPATCH_URL || '';
-            new URL(targetUrl);
+            targetUrl = publicUrl(process.env.DISPATCH_URL || '');
+            urls = [targetUrl];
+            for (const raw of String(process.env.DISPATCH_URL_LIST || '').split(/\r?\n/)) {
+              const value = raw.trim();
+              if (value) urls.push(publicUrl(value));
+            }
+            renderJs = String(process.env.DISPATCH_RENDER_JS || '').toLowerCase() === 'true';
             run = true;
             requestId = `dispatch-${process.env.GITHUB_RUN_ID}`;
           } else if (fs.existsSync('requests/audit.json')) {
@@ -86,17 +108,22 @@ jobs:
               if (!req.source_context || req.source_context.project_id !== 'project-seo' || !safeText(req.source_context.source_set_version)) {
                 throw new Error('invalid source_context');
               }
-              targetUrl = req.url || '';
-              new URL(targetUrl);
+              targetUrl = publicUrl(req.url || '');
+              urls = [targetUrl];
+              if (Array.isArray(req.urls)) for (const value of req.urls) urls.push(publicUrl(value));
+              renderJs = req.render_js === true;
               sourceSetVersion = req.source_context.source_set_version.trim();
               run = true;
               requestId = req.request_id;
             }
           }
+          urls = [...new Set(urls)].slice(0, 500);
           write('run', run ? 'true' : 'false');
           write('request_id', requestId);
           write('target_url', targetUrl);
           write('source_set_version', sourceSetVersion);
+          write('url_list_b64', Buffer.from(urls.join('\n'), 'utf8').toString('base64'));
+          write('render_js', renderJs ? 'true' : 'false');
           NODE
 
   audit:
@@ -108,6 +135,8 @@ jobs:
       TARGET_URL: ${{ needs.resolve-request.outputs.target_url }}
       REQUEST_ID: ${{ needs.resolve-request.outputs.request_id }}
       SOURCE_SET_VERSION: ${{ needs.resolve-request.outputs.source_set_version }}
+      URL_LIST_B64: ${{ needs.resolve-request.outputs.url_list_b64 }}
+      RENDER_JS: ${{ needs.resolve-request.outputs.render_js }}
       SITEONE_VERSION: "2.5.1"
       SITEONE_SHA256: "09278d958d4a087fa46093805cd33b085b96618001dd31d45c448ad724c9024e"
       VNU_ASSET_ID: "515207969"
@@ -122,14 +151,35 @@ jobs:
           cache: npm
       - name: Install locked Node tooling
         run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Validate public target
-        run: python3 scripts/validate_target.py "$TARGET_URL"
-      - name: Prepare report directories
-        run: mkdir -p reports tools/siteone
+      - name: Prepare bounded runtime URL list
+        run: |
+          mkdir -p reports tools/siteone
+          printf '%s' "$URL_LIST_B64" | base64 --decode > reports/runtime-urls.txt
+          test -s reports/runtime-urls.txt
+          while IFS= read -r url; do
+            [ -z "$url" ] || python3 scripts/validate_target.py "$url"
+          done < reports/runtime-urls.txt
       - name: Core SEO and indexability check
         id: basic
         continue-on-error: true
         run: python3 scripts/seo_basic_check.py "$TARGET_URL" --output reports/basic-seo.json --fail-on-indexability
+      - name: Stable bounded URL batch evidence
+        id: batch
+        continue-on-error: true
+        run: python3 scripts/run_url_batch.py --url-list reports/runtime-urls.txt --output reports/url-batch.json --max-urls 500
+      - name: Normalize technical findings
+        id: normalize
+        if: steps.batch.outcome == 'success'
+        run: python3 scripts/technical_evidence.py normalize --input reports/url-batch.json --output reports/technical-findings.json --graph-output reports/technical-graph.json
+      - name: Extract discovered sitemap URLs
+        id: sitemap
+        if: steps.batch.outcome == 'success'
+        continue-on-error: true
+        run: python3 scripts/extract_sitemap_urls.py --input reports/url-batch.json --output reports/sitemap-urls.txt --report reports/sitemap-extraction.json
+      - name: Reconcile crawl and sitemap
+        id: reconcile
+        if: steps.normalize.outcome == 'success' && steps.sitemap.outcome == 'success'
+        run: python3 scripts/technical_evidence.py normalize --input reports/url-batch.json --output reports/technical-findings.json --sitemap-list reports/sitemap-urls.txt --graph-output reports/technical-graph.json
       - name: Install pinned SiteOne Crawler
         run: |
           curl -fsSL "https://github.com/janreges/siteone-crawler/releases/download/v${SITEONE_VERSION}/siteone-crawler-v${SITEONE_VERSION}-linux-x64.tar.gz" -o /tmp/siteone.tar.gz
@@ -144,10 +194,24 @@ jobs:
         run: |
           "$SITEONE_BIN" \
             --url="$TARGET_URL" \
+            --url-list=reports/runtime-urls.txt \
             --max-reqs-per-sec=5 \
             --output-html-report=reports/siteone.html \
             --output-json-file=reports/siteone.json \
             --output-text-file=reports/siteone.txt
+      - name: SiteOne rendered browser crawl
+        id: siteone_rendered
+        if: env.RENDER_JS == 'true'
+        continue-on-error: true
+        run: |
+          "$SITEONE_BIN" \
+            --url="$TARGET_URL" \
+            --url-list=reports/runtime-urls.txt \
+            --browser \
+            --max-reqs-per-sec=3 \
+            --output-html-report=reports/siteone-rendered.html \
+            --output-json-file=reports/siteone-rendered.json \
+            --output-text-file=reports/siteone-rendered.txt
       - name: Lighthouse CI collection
         id: lighthouse
         continue-on-error: true
@@ -189,9 +253,17 @@ jobs:
             --target-url "$TARGET_URL" \
             --request-id "$REQUEST_ID" \
             --source-set-version "$SOURCE_SET_VERSION" \
+            --artifact runtime-urls=reports/runtime-urls.txt \
             --artifact basic=reports/basic-seo.json \
+            --artifact url-batch=reports/url-batch.json \
+            --artifact technical-findings=reports/technical-findings.json \
+            --artifact technical-graph=reports/technical-graph.json \
+            --artifact sitemap-extraction=reports/sitemap-extraction.json \
+            --artifact sitemap-urls=reports/sitemap-urls.txt \
             --artifact siteone-json=reports/siteone.json \
             --artifact siteone-html=reports/siteone.html \
+            --artifact siteone-rendered-json=reports/siteone-rendered.json \
+            --artifact siteone-rendered-html=reports/siteone-rendered.html \
             --artifact lighthouse-summary=reports/lighthouse-summary.json \
             --artifact lighthouse-raw=.lighthouseci \
             --artifact w3c-nu=reports/w3c-nu.json \
@@ -205,11 +277,17 @@ jobs:
             echo "Request: $REQUEST_ID"
             echo "Source set: ${SOURCE_SET_VERSION:-not-provided}"
             echo "Target: $TARGET_URL"
+            echo "Rendered crawl requested: $RENDER_JS"
             echo ""
             echo "| Controle | Status |"
             echo "|---|---|"
             echo "| Indexability/basic SEO | ${{ steps.basic.outcome }} |"
+            echo "| Bounded URL batch | ${{ steps.batch.outcome }} |"
+            echo "| Technical normalization | ${{ steps.normalize.outcome }} |"
+            echo "| Sitemap extraction | ${{ steps.sitemap.outcome }} |"
+            echo "| Sitemap reconciliation | ${{ steps.reconcile.outcome }} |"
             echo "| SiteOne crawl | ${{ steps.siteone.outcome }} |"
+            echo "| SiteOne rendered crawl | ${{ steps.siteone_rendered.outcome }} |"
             echo "| Lighthouse CI | ${{ steps.lighthouse.outcome }} |"
             echo "| Lighthouse summary | ${{ steps.lighthouse_summary.outcome }} |"
             echo "| Local Nu HTML | ${{ steps.vnu.outcome }} |"
@@ -230,7 +308,10 @@ jobs:
         run: |
           failed=0
           [ "${{ steps.basic.outcome }}" = "success" ] || failed=1
+          [ "${{ steps.batch.outcome }}" = "success" ] || failed=1
+          [ "${{ steps.normalize.outcome }}" = "success" ] || failed=1
           [ "${{ steps.siteone.outcome }}" = "success" ] || failed=1
+          if [ "$RENDER_JS" = "true" ]; then [ "${{ steps.siteone_rendered.outcome }}" = "success" ] || failed=1; fi
           [ "${{ steps.lighthouse.outcome }}" = "success" ] || failed=1
           [ "${{ steps.lighthouse_summary.outcome }}" = "success" ] || failed=1
           [ "${{ steps.vnu.outcome }}" = "success" ] || failed=1
