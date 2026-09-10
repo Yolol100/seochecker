@@ -1,103 +1,71 @@
 # SEO Checker — Technical SEO Evidence
 
-SEO Checker turns one public website URL into a repeatable technical SEO evidence package.
+SEO Checker turns public website targets into repeatable technical SEO evidence. **Project SEO owns strategy and interpretation; this repository owns controlled technical observation, scope metadata and regression evidence.** Ahrefs and GSC remain separate evidence sources.
 
-**Built by:** [Andrew Baeten](https://github.com/Yolol100) · [Portfolio](https://andrewbaeten.nl)
+## Evidence chain
 
-## Eén taak
+`Ahrefs/GSC/SEO-selected scope -> SEO Checker -> normalized findings/relations -> fix -> compatible baseline comparison -> evidence manifest`
 
-`publieke URL -> technische live-checks -> crawl/lab/HTML evidence -> artifact`
+The repository never stores client truth, Ahrefs/GSC exports or run-specific target inventories on `main`.
 
-De repository bepaalt geen SEO-strategie en bevat geen klantwaarheid. Project SEO in Google Drive bepaalt beleid en interpretatie; deze repo levert alleen gecontroleerde technische evidence.
+## Crawl scopes
 
-## Workflow
+### `bounded` (default)
+Use for URLs selected by GSC, Ahrefs, sitemap evidence or the SEO Skill. Maximum 500 runtime URLs. SiteOne receives `--url-list` **and** `--single-page`, so discovered page links are not silently expanded.
 
-Gebruik **Actions -> SEO Audit -> Run workflow** en geef een publieke HTTPS-URL op.
+### `sitewide`
+Use only when a whole-site technical crawl is required. SiteOne discovers same-scope HTML pages with an explicit `sitewide_max_urls` cap. The discovered page set is then passed through the repository's detailed HTTP parser, so canonical, hreflang, pagination and sitemap relations are normalized consistently.
 
-De audit voert uit:
+A site-wide completeness claim is valid only when `reports/crawl-scope.json` says `scope_complete: true`. Hitting the crawl cap fails the critical evidence gate instead of silently claiming full coverage.
 
-- HTTP/final URL en indexability-checks;
-- meta robots, `X-Robots-Tag`, canonical, sitemap en basismetadata;
-- JSON-LD-syntax en gevonden types;
-- SiteOne crawl;
-- Lighthouse CI labmeting;
-- lokale Nu HTML-validatie;
-- `reports/evidence-manifest.json` met provenance en artifactinventaris.
+## Rendered DOM
 
-Belangrijkste output:
+Set `render_js=true` only when JavaScript can change SEO-relevant output. Browser mode is fail-closed unless `trusted_render_target=true`, because a real browser may load page subresources outside the crawler's top-document scope.
 
-- `reports/evidence-manifest.json`
-- `reports/basic-seo.json`
-- `reports/siteone.json`
-- `reports/siteone.html`
-- `reports/lighthouse-summary.json`
-- `reports/w3c-nu.json`
-- `.lighthouseci/` alleen wanneer ruwe diagnose nodig is
+Rendered output remains separate: `reports/siteone-rendered.json`, `reports/siteone-rendered.html`, and `reports/rendered-technical-findings.json`.
 
-Lees na iedere run eerst `reports/evidence-manifest.json`.
+SiteOne 2.5.1 JSON does not reliably expose every rendered head relation. The normalized rendered artifact publishes an explicit coverage boundary. If rendered hreflang, pagination or another non-exported DOM signal can change acceptance, use dedicated browser/DOM evidence; never silently substitute HTTP-response HTML.
 
-## Post-publication check
+## Automatic regression comparison
 
-`scripts/verify_page_expectations.py` vergelijkt de live HTTP-response/HTML met expliciete runtime-verwachtingen. Het script controleert geen JavaScript-browser-DOM.
+Pass `baseline_run_id=<earlier SEO Audit run id>` to a later run. The workflow downloads the previous `seo-audit-report`, verifies repository, workflow, target and runtime scope compatibility, and only then creates `reports/baseline-validation.json` and `reports/regression-diff.json`. With `fail_on_regression=true`, regressions or missing-after URLs fail the audit gate.
 
-Ondersteunde verwachtingen zijn `status`, `indexable`, `title_contains`, `meta_contains`, `h1_contains`, `canonical_equals`, `final_url_equals` en `required_internal_links`.
+## Technical coverage
 
-Voorbeeld:
+Within the explicit observed scope the checker covers HTTP/final URL state, robots/X-Robots-Tag, title/description/H1, canonical targets/loops/chains/cross-domain targets, hreflang target health/return links/canonical consistency, `rel=next`/`rel=prev` consistency, sitemap redirects/non-200/noindex/canonical mismatches, SiteOne diagnostics, Lighthouse CI lab evidence, local Nu HTML validation, post-publication expectations, and before/after regression comparison.
 
-```json
-{
-  "url": "https://example.nl/dienst/",
-  "expected": {
-    "status": 200,
-    "indexable": true,
-    "title_contains": "Dienst",
-    "canonical_equals": "/dienst/",
-    "required_internal_links": ["/contact/"]
-  }
-}
-```
+Technical tool findings are diagnostics, not Google ranking or indexing verdicts.
 
-```bash
-python3 scripts/verify_page_expectations.py expectations.json --report reports/page-expectations.json
-```
+## Network safety
 
-Commit geen klant-/URL-specifieke expectationbestanden op `main`. Een geslaagde check bewijst alleen de expliciet gecontroleerde live HTTP/HTML-eigenschappen, niet ranking, verkeer, conversies of JavaScript-gerenderde toestand.
+Repository-owned HTTP and sitemap requests use `scripts/safe_http.py`: every request/redirect hop is DNS-resolved, all resolved addresses must be globally routable, and the TCP connection is pinned to a validated IP while preserving original Host/SNI. URL credentials are rejected. Sitemap responses have both compressed/raw and decompressed size bounds.
 
-## Wat bewust niet in deze repo zit
+Third-party SiteOne browser mode cannot provide the same per-subresource pinning guarantee, so rendered mode requires an explicit trusted-target acknowledgement.
 
-- GSC-data of GSC OAuth;
-- Ahrefs-data of API-keys;
-- keyword-, backlink- of AI-zichtbaarheidsstrategie;
-- content-/media-/schema-beleid dat al in Project SEO staat;
-- ranking-, traffic-, lead- of omzetclaims.
+## Main artifacts
 
-GSC, Ahrefs, analytics en andere databronnen worden buiten deze repo gebruikt en alleen gecombineerd wanneer hun evidenceklasse de SEO-beslissing echt verandert.
+Read `reports/evidence-manifest.json` first. Then use `reports/crawl-scope.json`, `reports/technical-findings.json`, `reports/technical-graph.json`, `reports/rendered-technical-findings.json`, `reports/regression-diff.json`, `reports/lighthouse-summary.json`, and `reports/w3c-nu.json` as their separate evidence layers.
 
-## Bewijsgrenzen
+## External evidence boundaries
 
-- Toolmeldingen zijn diagnostics, geen Google-oordeel.
-- Lighthouse is labdata en vervangt geen fielddata/CrUX.
-- Een technische audit bewijst geen indexatie, ranking, verkeer of conversie.
-- `toolkit-contract.json` is het enige repositorycontract.
-- Klant-/run-specifieke waarheid hoort in runtime-input of artifacts, niet permanent op `main`.
+- **GSC**: Google's owned Search performance and URL Inspection/index evidence.
+- **Ahrefs**: Ahrefs' keyword, backlink, market and competitive datasets.
+- **SEO Checker**: current reproducible technical observation and regression evidence.
+- **SEO Skill / Project SEO sources**: interpretation, prioritization and acceptance requirements.
 
-## Veiligheid
+Do not add GSC OAuth, Ahrefs API keys, keyword databases or backlink databases to this repository.
 
-Private, loopback en link-local targets worden geweigerd. Commit geen credentials, tokens, klantdata of exports.
-
-## Ontwikkeltest
+## Local tests
 
 ```bash
 python3 -m unittest discover -s tests -v
 python3 -m py_compile scripts/*.py tests/*.py
 ```
 
-## Over de ontwikkelaar
+## Post-publication expectations
 
-Andrew Baeten is Senior WordPress Developer & Web Designer met 10+ jaar ervaring, 90+ WordPress-projecten en beheer van 120+ websites en webshops.
+`scripts/verify_page_expectations.py` checks explicitly supplied runtime expectations. Keep client/URL-specific expectation files off `main`.
 
-## Licentie
+## License
 
-Deze repository bevat momenteel geen open-sourcelicentie. Hergebruik of distributie vereist expliciete toestemming van de rechthebbende.
-
-URL equality in post-publication checks preserves scheme, hostname (including www), non-default port, exact path and query. Only default ports, host case, empty root paths and fragments normalize. Empty pages or empty/unknown expectations are invalid input, never a successful check.
+This repository currently has no open-source license. Reuse or distribution requires explicit permission from the rights holder.

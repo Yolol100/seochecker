@@ -1,12 +1,9 @@
 #!/usr/bin/env python3
-"""Normalize technical crawl evidence and compare technical SEO runs.
-
-This module deliberately consumes generic runtime JSON. It does not call Ahrefs or GSC and
-contains no project/target truth. External tools select URLs; this runtime verifies technical state.
-"""
+"""Normalize technical crawl evidence, validate URL relationships and compare runs."""
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
@@ -23,9 +20,12 @@ def url_key(value: str) -> str:
 
 
 def _as_list(value):
-    if value is None:
-        return []
+    if value is None: return []
     return value if isinstance(value, list) else [value]
+
+
+def _url_list(values):
+    return [url_key(x) for x in _as_list(values) if str(x or "").strip()]
 
 
 def normalize_record(raw: dict) -> dict:
@@ -35,192 +35,143 @@ def normalize_record(raw: dict) -> dict:
     blockers = list(dict.fromkeys(_as_list(raw.get("indexability_blockers"))))
     warnings = list(dict.fromkeys(_as_list(raw.get("warnings"))))
     status = http.get("status") if isinstance(http, dict) else raw.get("status")
+    try: status = int(status) if status is not None else None
+    except (TypeError, ValueError): status = None
     canonical_values = _as_list(raw.get("canonical"))
     canonical = canonical_values[0] if len(canonical_values) == 1 else ""
     hreflang = raw.get("hreflang") if isinstance(raw.get("hreflang"), list) else []
     xrobots = _as_list(http.get("x_robots_tag") if isinstance(http, dict) else raw.get("x_robots_tag"))
     robots = _as_list(raw.get("robots")) + _as_list(raw.get("googlebot")) + xrobots
     noindex = any("noindex" in str(v).lower() for v in robots)
-    indexable = bool(status and 200 <= int(status) < 300 and not noindex and not blockers)
-    return {
-        "url": url_key(requested),
-        "requested_url": requested,
-        "final_url": url_key(final_url),
-        "status": status,
-        "indexable": indexable,
-        "canonical": url_key(canonical) if canonical else None,
-        "title": raw.get("title") or None,
-        "h1": raw.get("h1") or [],
-        "hreflang": [
-            {"lang": str(x.get("lang") or "").lower(), "url": url_key(x.get("url") or "")}
-            for x in hreflang
-            if isinstance(x, dict)
-        ],
-        "blockers": blockers,
-        "warnings": warnings,
-        "observation_layer": raw.get("observation_layer") or "http_response_html",
-    }
+    indexable = bool(status and 200 <= status < 300 and not noindex and not blockers)
+    return {"url": url_key(requested), "requested_url": requested, "final_url": url_key(final_url), "status": status, "indexable": indexable, "canonical": url_key(canonical) if canonical else None, "title": raw.get("title") or None, "h1": raw.get("h1") or [], "hreflang": [{"lang": str(x.get("lang") or "").lower(), "url": url_key(x.get("url") or "")} for x in hreflang if isinstance(x, dict) and str(x.get("url") or "").strip()], "pagination_next": _url_list(raw.get("pagination_next")), "pagination_prev": _url_list(raw.get("pagination_prev")), "blockers": blockers, "warnings": warnings, "observation_layer": raw.get("observation_layer") or "http_response_html"}
 
 
 def _extract_records(payload) -> list[dict]:
-    if isinstance(payload, list):
-        return [x for x in payload if isinstance(x, dict)]
-    if not isinstance(payload, dict):
-        raise ValueError("input JSON must be an object or array")
+    if isinstance(payload, list): return [x for x in payload if isinstance(x, dict)]
+    if not isinstance(payload, dict): raise ValueError("input JSON must be an object or array")
     for key in ("records", "pages", "results", "urls"):
-        if isinstance(payload.get(key), list):
-            return [x for x in payload[key] if isinstance(x, dict)]
+        if isinstance(payload.get(key), list): return [x for x in payload[key] if isinstance(x, dict)]
     return [payload]
+
+
+def _fingerprint_urls(records: list[dict]) -> str:
+    urls = sorted({r.get("url") for r in records if r.get("url")})
+    return hashlib.sha256(("\n".join(urls) + "\n").encode("utf-8")).hexdigest()
 
 
 def normalize_payload(payload) -> dict:
     records = [normalize_record(x) for x in _extract_records(payload)]
-    return {"schema_version": "1.0", "records": records}
+    return {"schema_version": "1.1", "scope": {"url_count": len(records), "url_fingerprint_sha256": _fingerprint_urls(records)}, "records": records}
 
 
 def _canonical_cycle(start: str, by_url: dict[str, dict]) -> str | None:
-    """Return the repeated URL when a real canonical cycle exists; self canonicals terminate."""
-    seen = set()
-    current = start
+    seen = set(); current = start
     while current in by_url:
-        if current in seen:
-            return current
+        if current in seen: return current
         seen.add(current)
         nxt = by_url[current].get("canonical")
-        if not nxt or nxt == current:
-            return None
+        if not nxt or nxt == current: return None
         current = nxt
     return None
 
 
-def validate_graph(normalized: dict, sitemap_urls=None) -> dict:
+def _host(url: str | None): return (urlsplit(url or "").hostname or "").lower()
+
+
+def validate_graph(normalized: dict, sitemap_urls=None, *, scope_complete: bool = False) -> dict:
     records = normalized.get("records", [])
     by_url = {r["url"]: r for r in records if r.get("url")}
     issues = []
-
+    def add(issue_type, url, severity, **extra): issues.append({"type": issue_type, "url": url, "severity": severity, **extra})
     for r in records:
-        url = r.get("url")
-        canonical = r.get("canonical")
+        url = r.get("url"); canonical = r.get("canonical")
         if canonical:
             cycle = _canonical_cycle(url, by_url)
-            if cycle:
-                issues.append({"type": "canonical_loop", "url": url, "target": cycle, "severity": "error"})
+            if cycle: add("canonical_loop", url, "error", target=cycle)
+            if _host(canonical) and _host(url) and _host(canonical) != _host(url): add("canonical_cross_domain", url, "info", target=canonical)
             if canonical in by_url:
                 target = by_url[canonical]
-                if target.get("status") != 200:
-                    issues.append({"type": "canonical_target_non_200", "url": url, "target": canonical, "severity": "error"})
-                if not target.get("indexable"):
-                    issues.append({"type": "canonical_target_not_indexable", "url": url, "target": canonical, "severity": "warning"})
+                if target.get("status") != 200: add("canonical_target_non_200", url, "error", target=canonical)
+                if not target.get("indexable"): add("canonical_target_not_indexable", url, "warning", target=canonical)
+                target_canonical = target.get("canonical")
+                if target_canonical and target_canonical != canonical: add("canonical_chain", url, "warning", via=canonical, target=target_canonical)
         for alt in r.get("hreflang", []):
-            target_url = alt.get("url")
-            target = by_url.get(target_url)
+            target_url = alt.get("url"); target = by_url.get(target_url)
             if not target:
-                issues.append({
-                    "type": "hreflang_target_not_observed",
-                    "url": url,
-                    "target": target_url,
-                    "lang": alt.get("lang"),
-                    "severity": "warning",
-                })
-                continue
-            if target.get("status") != 200:
-                issues.append({"type": "hreflang_target_non_200", "url": url, "target": target_url, "severity": "error"})
-            if not target.get("indexable"):
-                issues.append({"type": "hreflang_target_not_indexable", "url": url, "target": target_url, "severity": "error"})
-            reciprocal = any(x.get("url") == url for x in target.get("hreflang", []))
-            if not reciprocal:
-                issues.append({"type": "hreflang_return_link_missing", "url": url, "target": target_url, "severity": "error"})
-
+                add("hreflang_target_not_observed", url, "warning", target=target_url, lang=alt.get("lang")); continue
+            if target.get("status") != 200: add("hreflang_target_non_200", url, "error", target=target_url)
+            if not target.get("indexable"): add("hreflang_target_not_indexable", url, "error", target=target_url)
+            target_canonical = target.get("canonical")
+            if target_canonical and target_canonical != target_url: add("hreflang_target_canonical_mismatch", url, "warning", target=target_url, canonical=target_canonical)
+            if not any(x.get("url") == url for x in target.get("hreflang", [])): add("hreflang_return_link_missing", url, "error", target=target_url)
+        for rel, opposite in (("pagination_next", "pagination_prev"), ("pagination_prev", "pagination_next")):
+            for target_url in r.get(rel, []):
+                target = by_url.get(target_url)
+                if not target:
+                    add("pagination_target_not_observed", url, "warning", target=target_url, relation=rel); continue
+                if target.get("status") != 200: add("pagination_target_non_200", url, "error", target=target_url, relation=rel)
+                if not target.get("indexable"): add("pagination_target_not_indexable", url, "warning", target=target_url, relation=rel)
+                if target.get("canonical") and target.get("canonical") != target_url: add("pagination_target_canonical_mismatch", url, "warning", target=target_url, relation=rel, canonical=target.get("canonical"))
+                if url not in target.get(opposite, []): add("pagination_reciprocal_missing", url, "info", target=target_url, relation=rel)
     sitemap_count = None
     if sitemap_urls is not None:
-        sitemap = {url_key(x) for x in sitemap_urls if str(x).strip()}
-        sitemap_count = len(sitemap)
-        crawled = set(by_url)
-        # A bounded runtime URL set is not a full-site crawl. Only assert sitemap health for
-        # URLs that were actually observed; do not turn unobserved sitemap URLs into false issues.
+        sitemap = {url_key(x) for x in sitemap_urls if str(x).strip()}; sitemap_count = len(sitemap); crawled = set(by_url)
         for url in sorted(sitemap & crawled):
             r = by_url[url]
-            if r.get("status") != 200:
-                issues.append({"type": "sitemap_url_non_200", "url": url, "severity": "error"})
-            elif not r.get("indexable"):
-                issues.append({"type": "sitemap_url_not_indexable", "url": url, "severity": "error"})
-            elif r.get("canonical") and r.get("canonical") != url:
-                issues.append({"type": "sitemap_url_canonical_mismatch", "url": url, "target": r.get("canonical"), "severity": "warning"})
+            if r.get("final_url") and r.get("final_url") != url: add("sitemap_url_redirected", url, "error", target=r.get("final_url"))
+            if r.get("status") != 200: add("sitemap_url_non_200", url, "error")
+            elif not r.get("indexable"): add("sitemap_url_not_indexable", url, "error")
+            elif r.get("canonical") and r.get("canonical") != url: add("sitemap_url_canonical_mismatch", url, "warning", target=r.get("canonical"))
+        if scope_complete:
+            for url in sorted(sitemap - crawled): add("sitemap_url_not_observed", url, "warning")
         for url in sorted(crawled - sitemap):
-            if by_url[url].get("indexable"):
-                issues.append({"type": "indexable_observed_url_missing_from_sitemap", "url": url, "severity": "warning"})
+            if by_url[url].get("indexable"): add("indexable_observed_url_missing_from_sitemap", url, "warning")
+    limitations = []
+    if not scope_complete:
+        limitations = ["Relationship validation is limited to the observed URL set; unobserved targets remain open evidence.", "Sitemap URLs outside the observed runtime set are not classified as crawl failures."]
+    return {"schema_version": "1.1", "scope_complete": bool(scope_complete), "observed_url_count": len(by_url), "sitemap_url_count": sitemap_count, "issue_count": len(issues), "issues": issues, "limitations": limitations}
 
-    return {
-        "schema_version": "1.0",
-        "observed_url_count": len(by_url),
-        "sitemap_url_count": sitemap_count,
-        "issue_count": len(issues),
-        "issues": issues,
-        "limitations": [
-            "Sitemap reconciliation is scoped to observed runtime URLs unless a caller explicitly supplies a complete observed crawl.",
-            "hreflang targets outside the observed URL set remain open evidence, not proven failures.",
-        ],
-    }
+
+def _record_badness(r: dict) -> tuple:
+    return (r.get("status") != 200, not bool(r.get("indexable")), len(r.get("blockers") or []), len(r.get("warnings") or []))
 
 
 def diff_runs(before: dict, after: dict) -> dict:
-    before_map = {r["url"]: r for r in before.get("records", [])}
-    after_map = {r["url"]: r for r in after.get("records", [])}
-    changed = []
-    fields = ("status", "final_url", "indexable", "canonical", "title", "h1", "blockers", "warnings", "hreflang")
+    before_map = {r["url"]: r for r in before.get("records", []) if r.get("url")}; after_map = {r["url"]: r for r in after.get("records", []) if r.get("url")}
+    changed = []; fields = ("status", "final_url", "indexable", "canonical", "title", "h1", "blockers", "warnings", "hreflang", "pagination_next", "pagination_prev", "observation_layer")
     for url in sorted(set(before_map) | set(after_map)):
         b, a = before_map.get(url), after_map.get(url)
-        if b is None:
-            changed.append({"url": url, "classification": "new_url", "changes": {}})
-            continue
-        if a is None:
-            changed.append({"url": url, "classification": "missing_after", "changes": {}})
-            continue
+        if b is None: changed.append({"url": url, "classification": "new_url", "changes": {}}); continue
+        if a is None: changed.append({"url": url, "classification": "missing_after", "changes": {}}); continue
         delta = {f: {"before": b.get(f), "after": a.get(f)} for f in fields if b.get(f) != a.get(f)}
         if delta:
-            b_bad = bool(b.get("blockers")) or b.get("status") != 200
-            a_bad = bool(a.get("blockers")) or a.get("status") != 200
-            classification = "improved" if b_bad and not a_bad else "regressed" if not b_bad and a_bad else "changed"
+            b_bad = _record_badness(b); a_bad = _record_badness(a)
+            classification = "improved" if a_bad < b_bad else "regressed" if a_bad > b_bad else "changed"
             changed.append({"url": url, "classification": classification, "changes": delta})
     counts = {}
-    for item in changed:
-        counts[item["classification"]] = counts.get(item["classification"], 0) + 1
-    return {"schema_version": "1.0", "counts": counts, "changes": changed}
+    for item in changed: counts[item["classification"]] = counts.get(item["classification"], 0) + 1
+    return {"schema_version": "1.1", "before_url_count": len(before_map), "after_url_count": len(after_map), "counts": counts, "has_regressions": bool(counts.get("regressed") or counts.get("missing_after")), "changes": changed}
 
 
-def read_json(path):
-    return json.loads(Path(path).read_text(encoding="utf-8"))
-
+def read_json(path): return json.loads(Path(path).read_text(encoding="utf-8"))
 
 def write_json(path, payload):
-    p = Path(path)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(payload, indent=2, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
+    p=Path(path); p.parent.mkdir(parents=True, exist_ok=True); p.write_text(json.dumps(payload, indent=2, ensure_ascii=False, sort_keys=True)+"\n", encoding="utf-8")
 
 
 def main():
-    ap = argparse.ArgumentParser(description=__doc__)
-    sub = ap.add_subparsers(dest="command", required=True)
-    p = sub.add_parser("normalize")
-    p.add_argument("--input", required=True)
-    p.add_argument("--output", required=True)
-    p.add_argument("--sitemap-list")
-    p.add_argument("--graph-output")
-    d = sub.add_parser("diff")
-    d.add_argument("--before", required=True)
-    d.add_argument("--after", required=True)
-    d.add_argument("--output", required=True)
-    args = ap.parse_args()
+    ap=argparse.ArgumentParser(description=__doc__); sub=ap.add_subparsers(dest="command", required=True)
+    p=sub.add_parser("normalize"); p.add_argument("--input", required=True); p.add_argument("--output", required=True); p.add_argument("--sitemap-list"); p.add_argument("--graph-output"); p.add_argument("--scope-complete", action="store_true")
+    d=sub.add_parser("diff"); d.add_argument("--before", required=True); d.add_argument("--after", required=True); d.add_argument("--output", required=True); d.add_argument("--fail-on-regression", action="store_true")
+    args=ap.parse_args()
     if args.command == "normalize":
-        normalized = normalize_payload(read_json(args.input))
-        write_json(args.output, normalized)
+        normalized=normalize_payload(read_json(args.input)); write_json(args.output, normalized)
         if args.graph_output:
-            sitemap = Path(args.sitemap_list).read_text(encoding="utf-8").splitlines() if args.sitemap_list else None
-            write_json(args.graph_output, validate_graph(normalized, sitemap))
-    else:
-        write_json(args.output, diff_runs(read_json(args.before), read_json(args.after)))
-    return 0
+            sitemap=Path(args.sitemap_list).read_text(encoding="utf-8").splitlines() if args.sitemap_list else None
+            write_json(args.graph_output, validate_graph(normalized, sitemap, scope_complete=args.scope_complete))
+        return 0
+    diff=diff_runs(read_json(args.before), read_json(args.after)); write_json(args.output, diff)
+    return 1 if args.fail_on_regression and diff["has_regressions"] else 0
 
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+if __name__ == "__main__": raise SystemExit(main())
