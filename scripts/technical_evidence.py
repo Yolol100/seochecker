@@ -34,6 +34,7 @@ def normalize_record(raw: dict) -> dict:
     http = raw.get("http") if isinstance(raw.get("http"), dict) else raw
     final_url = http.get("final_url") or raw.get("final_url") or requested
     blockers = list(dict.fromkeys(_as_list(raw.get("indexability_blockers"))))
+    crawlability_blockers = list(dict.fromkeys(_as_list(raw.get("crawlability_blockers"))))
     warnings = list(dict.fromkeys(_as_list(raw.get("warnings"))))
     status = http.get("status") if isinstance(http, dict) else raw.get("status")
     try:
@@ -47,12 +48,17 @@ def normalize_record(raw: dict) -> dict:
     robots = _as_list(raw.get("robots")) + _as_list(raw.get("googlebot")) + xrobots
     noindex = any("noindex" in str(v).lower() for v in robots)
     indexable = bool(status and 200 <= status < 300 and not noindex and not blockers)
+    robots_googlebot = raw.get("robots_googlebot") if isinstance(raw.get("robots_googlebot"), dict) else {}
+    robots_allowed = robots_googlebot.get("allowed")
+    crawlable = None if robots_allowed is None else bool(robots_allowed and not crawlability_blockers)
     return {
         "url": url_key(requested),
         "requested_url": requested,
         "final_url": url_key(final_url),
         "status": status,
         "indexable": indexable,
+        "crawlable_googlebot": crawlable,
+        "robots_googlebot": robots_googlebot or None,
         "canonical": url_key(canonical) if canonical else None,
         "title": raw.get("title") or None,
         "h1": raw.get("h1") or [],
@@ -64,6 +70,7 @@ def normalize_record(raw: dict) -> dict:
         "pagination_next": _url_list(raw.get("pagination_next")),
         "pagination_prev": _url_list(raw.get("pagination_prev")),
         "blockers": blockers,
+        "crawlability_blockers": crawlability_blockers,
         "warnings": warnings,
         "observation_layer": raw.get("observation_layer") or "http_response_html",
     }
@@ -87,7 +94,7 @@ def _fingerprint_urls(records: list[dict]) -> str:
 
 def normalize_payload(payload) -> dict:
     records = [normalize_record(x) for x in _extract_records(payload)]
-    return {"schema_version": "1.2", "scope": {"url_count": len(records), "url_fingerprint_sha256": _fingerprint_urls(records)}, "records": records}
+    return {"schema_version": "1.3", "scope": {"url_count": len(records), "url_fingerprint_sha256": _fingerprint_urls(records)}, "records": records}
 
 
 def _canonical_cycle(start: str, by_url: dict[str, dict]) -> str | None:
@@ -118,6 +125,8 @@ def validate_graph(normalized: dict, sitemap_urls=None, *, scope_complete: bool 
 
     for r in records:
         url = r.get("url")
+        if r.get("crawlable_googlebot") is False:
+            add("url_blocked_by_robots_googlebot", url, "warning", matched_rule=(r.get("robots_googlebot") or {}).get("matched_rule"))
         canonical = r.get("canonical")
         if canonical:
             cycle = _canonical_cycle(url, by_url)
@@ -131,6 +140,8 @@ def validate_graph(normalized: dict, sitemap_urls=None, *, scope_complete: bool 
                     add("canonical_target_non_200", url, "error", target=canonical)
                 if not target.get("indexable"):
                     add("canonical_target_not_indexable", url, "warning", target=canonical)
+                if target.get("crawlable_googlebot") is False:
+                    add("canonical_target_not_crawlable_googlebot", url, "warning", target=canonical)
                 target_canonical = target.get("canonical")
                 if target_canonical and target_canonical != canonical:
                     add("canonical_chain", url, "warning", via=canonical, target=target_canonical)
@@ -144,6 +155,8 @@ def validate_graph(normalized: dict, sitemap_urls=None, *, scope_complete: bool 
                 add("hreflang_target_non_200", url, "error", target=target_url)
             if not target.get("indexable"):
                 add("hreflang_target_not_indexable", url, "error", target=target_url)
+            if target.get("crawlable_googlebot") is False:
+                add("hreflang_target_not_crawlable_googlebot", url, "warning", target=target_url)
             target_canonical = target.get("canonical")
             if target_canonical and target_canonical != target_url:
                 add("hreflang_target_canonical_mismatch", url, "warning", target=target_url, canonical=target_canonical)
@@ -159,6 +172,8 @@ def validate_graph(normalized: dict, sitemap_urls=None, *, scope_complete: bool 
                     add("pagination_target_non_200", url, "error", target=target_url, relation=rel)
                 if not target.get("indexable"):
                     add("pagination_target_not_indexable", url, "warning", target=target_url, relation=rel)
+                if target.get("crawlable_googlebot") is False:
+                    add("pagination_target_not_crawlable_googlebot", url, "warning", target=target_url, relation=rel)
                 if target.get("canonical") and target.get("canonical") != target_url:
                     add("pagination_target_canonical_mismatch", url, "warning", target=target_url, relation=rel, canonical=target.get("canonical"))
                 if url not in target.get(opposite, []):
@@ -176,6 +191,8 @@ def validate_graph(normalized: dict, sitemap_urls=None, *, scope_complete: bool 
                 add("sitemap_url_non_200", url, "error")
             elif not r.get("indexable"):
                 add("sitemap_url_not_indexable", url, "error")
+            elif r.get("crawlable_googlebot") is False:
+                add("sitemap_url_not_crawlable_googlebot", url, "warning")
             elif r.get("canonical") and r.get("canonical") != url:
                 add("sitemap_url_canonical_mismatch", url, "warning", target=r.get("canonical"))
         if scope_complete:
@@ -191,7 +208,7 @@ def validate_graph(normalized: dict, sitemap_urls=None, *, scope_complete: bool 
             "Sitemap URLs outside the observed runtime set are not classified as crawl failures.",
         ]
     return {
-        "schema_version": "1.2",
+        "schema_version": "1.3",
         "scope_complete": bool(scope_complete),
         "observed_url_count": len(by_url),
         "sitemap_url_count": sitemap_count,
@@ -202,10 +219,13 @@ def validate_graph(normalized: dict, sitemap_urls=None, *, scope_complete: bool 
 
 
 def _record_badness(r: dict) -> tuple:
+    crawl_bad = r.get("crawlable_googlebot") is False
     return (
         r.get("status") != 200,
         not bool(r.get("indexable")),
+        crawl_bad,
         len(r.get("blockers") or []),
+        len(r.get("crawlability_blockers") or []),
         len(r.get("warnings") or []),
     )
 
@@ -213,7 +233,7 @@ def _record_badness(r: dict) -> tuple:
 def _issue_fingerprint(issue: dict) -> str:
     stable = {
         k: issue.get(k)
-        for k in ("type", "url", "target", "via", "relation", "lang", "canonical", "severity")
+        for k in ("type", "url", "target", "via", "relation", "lang", "canonical", "severity", "matched_rule")
         if issue.get(k) is not None
     }
     return hashlib.sha256(json.dumps(stable, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
@@ -242,7 +262,7 @@ def diff_runs(before: dict, after: dict, before_graph: dict | None = None, after
     before_map = {r["url"]: r for r in before.get("records", []) if r.get("url")}
     after_map = {r["url"]: r for r in after.get("records", []) if r.get("url")}
     changed = []
-    fields = ("status", "final_url", "indexable", "canonical", "title", "h1", "blockers", "warnings", "hreflang", "pagination_next", "pagination_prev", "observation_layer")
+    fields = ("status", "final_url", "indexable", "crawlable_googlebot", "robots_googlebot", "canonical", "title", "h1", "blockers", "crawlability_blockers", "warnings", "hreflang", "pagination_next", "pagination_prev", "observation_layer")
     for url in sorted(set(before_map) | set(after_map)):
         b, a = before_map.get(url), after_map.get(url)
         if b is None:
@@ -263,7 +283,7 @@ def diff_runs(before: dict, after: dict, before_graph: dict | None = None, after
     graph = diff_graphs(before_graph, after_graph)
     has_regressions = bool(counts.get("regressed") or counts.get("missing_after") or graph["has_regressions"])
     return {
-        "schema_version": "1.2",
+        "schema_version": "1.3",
         "before_url_count": len(before_map),
         "after_url_count": len(after_map),
         "counts": counts,
