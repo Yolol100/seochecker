@@ -12,6 +12,8 @@ The default branch never stores client truth, GSC/Ahrefs exports, target invento
 
 **Safe bounded core** works on a maximum of 500 explicit public URLs. Repository-owned HTTP follows every redirect through `scripts/safe_http.py`: all DNS answers must be globally routable and each TCP connection is pinned to a validated IP while Host/SNI keeps the original hostname.
 
+The safe core also evaluates `robots.txt` as a separate Googlebot **crawlability** evidence layer. It supports Googlebot-specific versus wildcard groups, `Allow`/`Disallow`, longest-match specificity, `*` wildcards and terminal `$` anchors. A robots block is never rewritten into a `noindex` claim: crawl permission and indexability remain separate evidence classes. The resulting state is carried into `reports/technical-findings.json`, relationship checks in `reports/technical-graph.json`, and before/after regression classification.
+
 **Trusted advanced audit** is enabled only with `trusted_render_target=true`. It may add SiteOne, SiteOne browser rendering and Lighthouse. Before SiteOne runs, `scripts/siteone_resolve.py` verifies that every requested origin resolves only to public addresses and records the result in `reports/siteone-network-preflight.json`. SiteOne then uses its native DNS/TLS stack: its 2.5.1 `--resolve` implementation is deliberately not used for HTTPS because it substitutes the URL hostname with the raw IP and can break TLS/SNI on otherwise healthy sites. Browser/crawler evidence therefore remains restricted to explicitly trusted targets.
 
 ## Crawl scopes
@@ -26,17 +28,23 @@ Set `render_js=true` only when JavaScript can change SEO-relevant output. `repor
 
 ## Regression comparison
 
-A later run can set `baseline_run_id=<earlier successful SEO Audit run>`. The workflow verifies repository, workflow, target, runtime scope, baseline run ID/status/commit and SHA-256 hashes for `technical-findings.json` and `technical-graph.json`. Only then is `reports/regression-diff.json` generated. URL regressions and new warning/error relationship issues can fail the run; informational graph observations do not automatically count as regressions.
+A later run can set `baseline_run_id=<earlier successful SEO Audit run>`. The workflow verifies repository, workflow, target, runtime scope, baseline run ID/status/commit and SHA-256 hashes for `technical-findings.json` and `technical-graph.json`. Only then is `reports/regression-diff.json` generated. URL regressions — including newly blocked Googlebot crawlability — and new warning/error relationship issues can fail the run; informational graph observations do not automatically count as regressions.
 
 ## Sitemap and markup safety
 
-Sitemap fetches use the pinned HTTP layer, compressed/raw and decompressed byte limits, URL/sitemap count caps, and reject DTD/ENTITY declarations. Sitemap extraction problems are evidence about the target; they do not masquerade as checker execution failures.
+Sitemap fetches use the pinned HTTP layer, compressed/raw and decompressed byte limits, URL/sitemap count caps, and reject DTD/ENTITY declarations. No advertised sitemap candidates is reported as `not_applicable`; applicable extraction is `complete` only when it finishes without errors or truncation. Sitemap extraction problems are evidence about the target; they do not masquerade as checker execution failures.
 
 Nu HTML Checker never fetches the target directly. `scripts/fetch_html_snapshot.py` first creates a safely fetched local HTML snapshot; Nu validates that local file. The workflow resolves the current official `validator/validator` `latest` release at run time, requires exactly one `vnu.jar`, verifies the downloaded bytes against the SHA-256 digest published in GitHub release metadata, and stores the exact release ID, asset ID, source commit and digest in `reports/vnu-tool-metadata.json`. This avoids stale rolling-release asset IDs without weakening integrity verification.
+
+## Reproducible runtimes
+
+Python-using GitHub Actions jobs are explicitly pinned to Python 3.14.7 through an immutable `actions/setup-python` v7.0.0 commit. Node tooling is lockfile-installed and Lighthouse CI is fixed at 0.15.1. The Nu runtime uses Java 17 through immutable `actions/setup-java` v6.0.1. Checkout and upload actions are also pinned to immutable commit SHAs. Dependabot watches npm and GitHub Actions weekly.
 
 ## Evidence manifest
 
 `reports/evidence-manifest.json` uses schema 1.2. It records request/source provenance, run/commit identity, artifact hashes, runtime URL fingerprint and generic scope fields including `scope_complete`, `crawl_limit_reached` and `effective_url_count`. Sitewide legacy aliases remain only for backward compatibility.
+
+Every literal `reports/*` audit artifact is toolkit-contract-owned and, except for the manifest itself, included in the manifest hashing path before upload. Redundant SiteOne text reports are deliberately disabled so uploaded report files cannot bypass provenance.
 
 ## Main artifacts
 
@@ -60,7 +68,7 @@ Read `reports/evidence-manifest.json` first. Relevant layers include:
 
 GSC is the owned Google Search/index evidence source. Ahrefs owns its market, keyword, backlink and competitive data. SEO Checker owns reproducible technical observations. The SEO Skill and Project SEO sources own interpretation, prioritization and acceptance requirements.
 
-A green audit does not prove ranking, traffic, conversions or future indexation. Lighthouse is lab data, not CrUX field data.
+A green audit does not prove ranking, traffic, conversions or future indexation. Lighthouse is lab data, not CrUX field data. A robots.txt block proves crawler access restriction for the evaluated user agent; it does not by itself prove that Google has or has not indexed a URL.
 
 ## Post-publication expectations
 
