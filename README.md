@@ -12,7 +12,7 @@ The default branch never stores client truth, GSC/Ahrefs exports, target invento
 
 **Safe bounded core** works on a maximum of 500 explicit public URLs. Repository-owned HTTP follows every redirect through `scripts/safe_http.py`: all DNS answers must be globally routable and each TCP connection is pinned to a validated IP while Host/SNI keeps the original hostname.
 
-**Trusted advanced audit** is enabled only with `trusted_render_target=true`. It may add SiteOne, SiteOne browser rendering and Lighthouse. SiteOne receives explicit `--resolve` mappings for requested hosts. Browser subresources are still an external runtime boundary, so browser/crawler evidence is never enabled for an untrusted arbitrary target.
+**Trusted advanced audit** is enabled only with `trusted_render_target=true`. It may add SiteOne, SiteOne browser rendering and Lighthouse. Before SiteOne runs, `scripts/siteone_resolve.py` verifies that every requested origin resolves only to public addresses. SiteOne then uses its native DNS/TLS stack: its 2.5.1 `--resolve` implementation is deliberately not used for HTTPS because it substitutes the URL hostname with the raw IP and can break TLS/SNI on otherwise healthy sites. Browser/crawler evidence therefore remains restricted to explicitly trusted targets.
 
 ## Crawl scopes
 

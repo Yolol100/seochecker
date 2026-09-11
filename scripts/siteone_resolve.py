@@ -1,9 +1,18 @@
 #!/usr/bin/env python3
-"""Build deterministic SiteOne --resolve arguments from public runtime URLs."""
+"""Validate SiteOne trusted-target DNS without forcing HTTPS to a raw IP.
+
+SiteOne 2.5.1 implements --resolve for its HTTP fetcher by replacing the URL host
+with the supplied IP while only restoring the HTTP Host header. For HTTPS this
+changes TLS/SNI/certificate semantics and can turn a healthy target into -1:CON.
+
+Repository-owned HTTP remains IP-pinned by safe_http.py. SiteOne is a separate
+third-party evidence layer and is allowed only for explicitly trusted targets,
+so this compatibility preflight validates that every requested host resolves
+only to public addresses and intentionally emits no --resolve arguments.
+"""
 from __future__ import annotations
 
 import argparse
-import ipaddress
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -20,36 +29,30 @@ def _urls(path: str) -> list[str]:
     return [x.strip() for x in Path(path).read_text(encoding="utf-8").splitlines() if x.strip() and not x.lstrip().startswith("#")]
 
 
-def _preferred_ip(ips: list[str]) -> str:
-    if not ips:
-        raise ValueError("no public IPs available")
-    ipv4 = [ip for ip in ips if ipaddress.ip_address(ip).version == 4]
-    return (ipv4 or ips)[0]
-
-
 def build_resolves(urls: list[str], include_www_peer: bool = True) -> list[str]:
-    targets: dict[tuple[str, int, str], None] = {}
+    """Validate requested origins and return no forced mappings for SiteOne 2.5.1.
+
+    The function name is retained for compatibility with existing callers/tests.
+    `include_www_peer` is retained as a compatibility argument but optional peer
+    hosts are deliberately not introduced into the trust surface.
+    """
+    del include_www_peer
+    seen: set[tuple[str, int, str]] = set()
     for url in urls:
         parsed = urlsplit(url)
         if parsed.scheme not in {"http", "https"} or not parsed.hostname:
             raise ValueError(f"invalid HTTP(S) URL: {url}")
+        if parsed.username or parsed.password:
+            raise ValueError("credentials in SiteOne target URLs are not allowed")
         port = parsed.port or (443 if parsed.scheme == "https" else 80)
-        targets[(parsed.hostname.lower(), port, parsed.scheme)] = None
-        if include_www_peer:
-            peer = parsed.hostname[4:] if parsed.hostname.lower().startswith("www.") else f"www.{parsed.hostname}"
-            targets[(peer.lower(), port, parsed.scheme)] = None
-    args: list[str] = []
-    for host, port, scheme in sorted(targets):
-        try:
-            ip = _preferred_ip(resolve_public_ips(f"{scheme}://{host}:{port}/"))
-        except ValueError:
-            # The www/non-www peer is optional. A requested host is not.
-            requested = any((urlsplit(u).hostname or "").lower() == host and (urlsplit(u).port or (443 if urlsplit(u).scheme == "https" else 80)) == port for u in urls)
-            if requested:
-                raise
+        key = (parsed.hostname.lower(), port, parsed.scheme)
+        if key in seen:
             continue
-        args.append(f"--resolve={host}:{port}:{ip}")
-    return args
+        seen.add(key)
+        resolve_public_ips(f"{parsed.scheme}://{parsed.hostname}:{port}/")
+    if not seen:
+        raise ValueError("no SiteOne target origins supplied")
+    return []
 
 
 def main() -> int:
@@ -58,8 +61,8 @@ def main() -> int:
     ap.add_argument("--output", required=True)
     args = ap.parse_args()
     values = build_resolves(_urls(args.url_list))
-    if not values:
-        raise ValueError("no SiteOne resolve mappings generated")
+    # An empty file is intentional: it proves preflight ran while ensuring the
+    # SiteOne command receives no TLS-breaking --resolve arguments.
     Path(args.output).write_text("".join(v + "\n" for v in values), encoding="utf-8")
     return 0
 
