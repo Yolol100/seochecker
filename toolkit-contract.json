@@ -10,6 +10,8 @@
   "tools": [
     {"id":"safe-http","version":"1.6","trigger_when":"every repository-owned HTTP, redirect, sitemap or snapshot request","outputs":["pinned public-IP HTTP observations"]},
     {"id":"core-indexability","version":"repo","trigger_when":"every technical audit","outputs":["reports/basic-seo.json"]},
+    {"id":"url-batch","version":"1","trigger_when":"after the effective URL scope resolves; collect stable repository-owned HTTP evidence across the exact effective URL set","outputs":["reports/url-batch.json"]},
+    {"id":"sitemap-extraction","version":"1.3","trigger_when":"after URL batch evidence; extract advertised public sitemap URLs within strict network and resource bounds for graph reconciliation","outputs":["reports/sitemap-extraction.json","reports/sitemap-urls.txt"]},
     {"id":"siteone-resolve","version":"3","trigger_when":"trusted_render_target=true before any SiteOne network crawl; validate requested origins as public, record explicit preflight evidence and intentionally emit no forced-IP args for SiteOne 2.5.1 HTTPS","outputs":["reports/siteone-network-preflight.json"]},
     {"id":"siteone","version":"2.5.1","trigger_when":"trusted_render_target=true; required for sitewide discovery","outputs":["reports/siteone.json","reports/siteone.html"]},
     {"id":"siteone-browser","version":"2.5.1","trigger_when":"rendered DOM evidence can change the decision and trusted_render_target=true","outputs":["reports/siteone-rendered.json","reports/siteone-rendered.html","reports/rendered-technical-findings.json"]},
@@ -42,6 +44,8 @@
   "usage_assertions": [
     {"tool":"safe-http","path":"scripts/safe_http.py","contains":"_PinnedHTTPSConnection"},
     {"tool":"core-indexability","path":".github/workflows/seo-audit.yml","contains":"Core SEO and indexability observation"},
+    {"tool":"url-batch","path":".github/workflows/seo-audit.yml","contains":"Stable effective URL batch evidence"},
+    {"tool":"sitemap-extraction","path":".github/workflows/seo-audit.yml","contains":"Extract discovered sitemap URLs"},
     {"tool":"siteone-resolve","path":"scripts/siteone_resolve.py","contains":"forced_ip_arguments_emitted"},
     {"tool":"siteone","path":".github/workflows/seo-audit.yml","contains":"SiteOne HTTP crawl with explicit scope"},
     {"tool":"siteone-browser","path":".github/workflows/seo-audit.yml","contains":"SiteOne rendered browser crawl"},
@@ -68,6 +72,9 @@
     "Bounded and sitewide scopes are separate contracts and must never be silently conflated.",
     "Rendered browser evidence and HTTP-response evidence retain separate observation-layer labels.",
     "Evidence manifest schema 1.2 records generic scope_complete/crawl_limit_reached fields; sitewide legacy aliases are retained only for sitewide compatibility.",
+    "Every literal reports/* artifact used by the audit is contract-owned and, except for the evidence manifest itself, hashed by the evidence manifest before upload.",
+    "Redundant SiteOne text reports are disabled so no uploaded report bypasses artifact provenance.",
+    "Sitemap extraction reports not_applicable when no sitemap candidates were advertised, complete when its applicable bounded extraction finished without errors or truncation, and partial otherwise.",
     "A sitewide completeness claim is invalid when the crawl cap is reached or crawl-scope.json says scope_complete=false.",
     "A regression claim requires a compatible successful prior run plus manifest-bound SHA-256 verification of baseline findings and graph artifacts.",
     "New warning/error relationship issues are regressions; new informational relationship observations are not automatically regressions.",
