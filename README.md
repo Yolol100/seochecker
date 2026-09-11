@@ -32,7 +32,7 @@ A later run can set `baseline_run_id=<earlier successful SEO Audit run>`. The wo
 
 Sitemap fetches use the pinned HTTP layer, compressed/raw and decompressed byte limits, URL/sitemap count caps, and reject DTD/ENTITY declarations. Sitemap extraction problems are evidence about the target; they do not masquerade as checker execution failures.
 
-Nu HTML Checker never fetches the target directly. `scripts/fetch_html_snapshot.py` first creates a safely fetched local HTML snapshot; Nu validates that local file.
+Nu HTML Checker never fetches the target directly. `scripts/fetch_html_snapshot.py` first creates a safely fetched local HTML snapshot; Nu validates that local file. The workflow resolves the current official `validator/validator` `latest` release at run time, requires exactly one `vnu.jar`, verifies the downloaded bytes against the SHA-256 digest published in GitHub release metadata, and stores the exact release ID, asset ID, source commit and digest in `reports/vnu-tool-metadata.json`. This avoids stale rolling-release asset IDs without weakening integrity verification.
 
 ## Main artifacts
 
@@ -46,6 +46,7 @@ Read `reports/evidence-manifest.json` first. Relevant layers include:
 - `reports/sitemap-extraction.json`
 - `reports/lighthouse-summary.json`
 - `reports/target-snapshot.json`
+- `reports/vnu-tool-metadata.json`
 - `reports/w3c-nu.json`
 - `reports/baseline-validation.json`
 - `reports/regression-diff.json`
