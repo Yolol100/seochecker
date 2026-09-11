@@ -21,6 +21,16 @@ class ClosureHardeningTests(unittest.TestCase):
             args=siteone_resolve.build_resolves(['https://example.com/a'],False)
         self.assertEqual(args,[])
         resolver.assert_called_once_with('https://example.com:443/')
+    def test_siteone_preflight_writes_explicit_json_evidence(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d); urls=root/'urls.txt'; out=root/'preflight.json'; urls.write_text('https://example.com/\n',encoding='utf-8')
+            with patch('scripts.siteone_resolve.resolve_public_ips',return_value=['93.184.216.34']), patch('sys.argv',['x','--url-list',str(urls),'--output',str(out)]):
+                self.assertEqual(siteone_resolve.main(),0)
+            payload=json.loads(out.read_text(encoding='utf-8'))
+        self.assertEqual(payload['validated_origin_count'],1)
+        self.assertFalse(payload['forced_ip_arguments_emitted'])
+        self.assertEqual(payload['network_mode'],'siteone_native_dns_tls')
+        self.assertEqual(payload['origins'][0]['public_ips'],['93.184.216.34'])
     def test_sitemap_dtd_rejected(self):
         with self.assertRaises(ValueError): sm.parse_locs(b'<!DOCTYPE x [<!ENTITY y "z">]><urlset/>')
     def test_sitewide_keeps_errors_and_unions_render(self):
@@ -41,16 +51,19 @@ class ClosureHardeningTests(unittest.TestCase):
             self.assertTrue(vb.validate(m,'https://example.com/','bounded',str(u),500,baseline_run_id='1',run_metadata=meta,findings_path=str(f),graph_path=str(g))['compatible']); g.write_text('x'); self.assertFalse(vb.validate(m,'https://example.com/','bounded',str(u),500,baseline_run_id='1',run_metadata=meta,findings_path=str(f),graph_path=str(g))['compatible'])
     def test_workflow_and_contract(self):
         root=Path(__file__).resolve().parents[1]; w=(root/'.github/workflows/seo-audit.yml').read_text(); c=json.loads((root/'toolkit-contract.json').read_text());
-        for x in ['resolve_audit_request.py','siteone_resolve.py','--single-page','--before-graph','--run-metadata','fetch_html_snapshot.py','reports/target-snapshot.html','Lighthouse CI collection on trusted target','rendered_normalize.outcome','scope_complete','repos/validator/validator/releases/tags/latest','browser_download_url','vnu-tool-metadata.json','github_release_digest_matched']: self.assertIn(x,w)
+        for x in ['resolve_audit_request.py','siteone_resolve.py','Validate SiteOne trusted target DNS','reports/siteone-network-preflight.json','--single-page','--before-graph','--run-metadata','fetch_html_snapshot.py','reports/target-snapshot.html','Lighthouse CI collection on trusted target','rendered_normalize.outcome','scope_complete','repos/validator/validator/releases/tags/latest','browser_download_url','vnu-tool-metadata.json','github_release_digest_matched']: self.assertIn(x,w)
         self.assertNotIn('releases/assets/${VNU_ASSET_ID}',w)
+        self.assertNotIn('RESOLVE_ARGS',w)
+        self.assertNotIn('siteone-resolve-args.txt',w)
         preflight=(root/'scripts/siteone_resolve.py').read_text()
-        self.assertIn('intentionally emits no --resolve arguments',preflight)
+        self.assertIn('intentionally emits no forced-IP arguments',preflight)
         self.assertNotIn('args.append(f"--resolve=',preflight)
         self.assertIn('sitewide scope requires trusted_render_target=true',(root/'scripts/resolve_audit_request.py').read_text()); self.assertNotIn('slice(0, 500)',w); ids={t['id'] for t in c['tools']}; covered=set()
         for a in c['usage_assertions']:
             self.assertIn(a['contains'],(root/a['path']).read_text(),a['tool']); covered.add(a['tool'])
         self.assertEqual(ids,covered)
         nu=next(t for t in c['tools'] if t['id']=='nu-html-checker'); self.assertEqual(nu['version'],'official-latest-digest-verified'); self.assertIn('reports/vnu-tool-metadata.json',nu['outputs'])
+        manifest=next(t for t in c['tools'] if t['id']=='evidence-manifest'); self.assertEqual(manifest['version'],'1.2')
     def test_snapshot_local_only(self):
         r=SimpleNamespace(status=200,url='https://example.com/f',connected_ip='93.184.216.34',headers=H({'Content-Type':'text/html'}),body=b'<html/>')
         with tempfile.TemporaryDirectory() as d, patch('scripts.fetch_html_snapshot.fetch_bytes',return_value=r), patch('sys.argv',['x','https://example.com/','--output',d+'/x.html','--metadata',d+'/x.json']): self.assertEqual(snap.main(),0)

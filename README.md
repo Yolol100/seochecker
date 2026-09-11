@@ -12,7 +12,7 @@ The default branch never stores client truth, GSC/Ahrefs exports, target invento
 
 **Safe bounded core** works on a maximum of 500 explicit public URLs. Repository-owned HTTP follows every redirect through `scripts/safe_http.py`: all DNS answers must be globally routable and each TCP connection is pinned to a validated IP while Host/SNI keeps the original hostname.
 
-**Trusted advanced audit** is enabled only with `trusted_render_target=true`. It may add SiteOne, SiteOne browser rendering and Lighthouse. Before SiteOne runs, `scripts/siteone_resolve.py` verifies that every requested origin resolves only to public addresses. SiteOne then uses its native DNS/TLS stack: its 2.5.1 `--resolve` implementation is deliberately not used for HTTPS because it substitutes the URL hostname with the raw IP and can break TLS/SNI on otherwise healthy sites. Browser/crawler evidence therefore remains restricted to explicitly trusted targets.
+**Trusted advanced audit** is enabled only with `trusted_render_target=true`. It may add SiteOne, SiteOne browser rendering and Lighthouse. Before SiteOne runs, `scripts/siteone_resolve.py` verifies that every requested origin resolves only to public addresses and records the result in `reports/siteone-network-preflight.json`. SiteOne then uses its native DNS/TLS stack: its 2.5.1 `--resolve` implementation is deliberately not used for HTTPS because it substitutes the URL hostname with the raw IP and can break TLS/SNI on otherwise healthy sites. Browser/crawler evidence therefore remains restricted to explicitly trusted targets.
 
 ## Crawl scopes
 
@@ -34,12 +34,17 @@ Sitemap fetches use the pinned HTTP layer, compressed/raw and decompressed byte 
 
 Nu HTML Checker never fetches the target directly. `scripts/fetch_html_snapshot.py` first creates a safely fetched local HTML snapshot; Nu validates that local file. The workflow resolves the current official `validator/validator` `latest` release at run time, requires exactly one `vnu.jar`, verifies the downloaded bytes against the SHA-256 digest published in GitHub release metadata, and stores the exact release ID, asset ID, source commit and digest in `reports/vnu-tool-metadata.json`. This avoids stale rolling-release asset IDs without weakening integrity verification.
 
+## Evidence manifest
+
+`reports/evidence-manifest.json` uses schema 1.2. It records request/source provenance, run/commit identity, artifact hashes, runtime URL fingerprint and generic scope fields including `scope_complete`, `crawl_limit_reached` and `effective_url_count`. Sitewide legacy aliases remain only for backward compatibility.
+
 ## Main artifacts
 
 Read `reports/evidence-manifest.json` first. Relevant layers include:
 
 - `reports/basic-seo.json`
 - `reports/crawl-scope.json`
+- `reports/siteone-network-preflight.json`
 - `reports/technical-findings.json`
 - `reports/technical-graph.json`
 - `reports/rendered-technical-findings.json`

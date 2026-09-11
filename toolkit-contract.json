@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.8",
+  "schema_version": "1.9",
   "owner_skill": "seo",
   "project_id": "project-seo",
   "repository": "Yolol100/seochecker",
@@ -10,7 +10,7 @@
   "tools": [
     {"id":"safe-http","version":"1.6","trigger_when":"every repository-owned HTTP, redirect, sitemap or snapshot request","outputs":["pinned public-IP HTTP observations"]},
     {"id":"core-indexability","version":"repo","trigger_when":"every technical audit","outputs":["reports/basic-seo.json"]},
-    {"id":"siteone-resolve","version":"2","trigger_when":"trusted_render_target=true before any SiteOne network crawl; validate requested origins as public but intentionally emit no forced-IP args for SiteOne 2.5.1 HTTPS","outputs":["reports/siteone-resolve-args.txt"]},
+    {"id":"siteone-resolve","version":"3","trigger_when":"trusted_render_target=true before any SiteOne network crawl; validate requested origins as public, record explicit preflight evidence and intentionally emit no forced-IP args for SiteOne 2.5.1 HTTPS","outputs":["reports/siteone-network-preflight.json"]},
     {"id":"siteone","version":"2.5.1","trigger_when":"trusted_render_target=true; required for sitewide discovery","outputs":["reports/siteone.json","reports/siteone.html"]},
     {"id":"siteone-browser","version":"2.5.1","trigger_when":"rendered DOM evidence can change the decision and trusted_render_target=true","outputs":["reports/siteone-rendered.json","reports/siteone-rendered.html","reports/rendered-technical-findings.json"]},
     {"id":"bounded-url-list","version":"2","trigger_when":"SEO supplies a bounded runtime URL set from GSC, Ahrefs, sitemap or another source","outputs":["reports/runtime-urls.txt","reports/effective-urls.txt","reports/crawl-scope.json"]},
@@ -42,7 +42,7 @@
   "usage_assertions": [
     {"tool":"safe-http","path":"scripts/safe_http.py","contains":"_PinnedHTTPSConnection"},
     {"tool":"core-indexability","path":".github/workflows/seo-audit.yml","contains":"Core SEO and indexability observation"},
-    {"tool":"siteone-resolve","path":"scripts/siteone_resolve.py","contains":"intentionally emits no --resolve arguments"},
+    {"tool":"siteone-resolve","path":"scripts/siteone_resolve.py","contains":"forced_ip_arguments_emitted"},
     {"tool":"siteone","path":".github/workflows/seo-audit.yml","contains":"SiteOne HTTP crawl with explicit scope"},
     {"tool":"siteone-browser","path":".github/workflows/seo-audit.yml","contains":"SiteOne rendered browser crawl"},
     {"tool":"bounded-url-list","path":".github/workflows/seo-audit.yml","contains":"--single-page"},
@@ -52,7 +52,7 @@
     {"tool":"lighthouse-ci","path":".github/workflows/seo-audit.yml","contains":"Lighthouse CI collection on trusted target"},
     {"tool":"safe-html-snapshot","path":".github/workflows/seo-audit.yml","contains":"fetch_html_snapshot.py"},
     {"tool":"nu-html-checker","path":".github/workflows/seo-audit.yml","contains":"vnu-tool-metadata.json"},
-    {"tool":"evidence-manifest","path":".github/workflows/seo-audit.yml","contains":"build_evidence_manifest.py"},
+    {"tool":"evidence-manifest","path":"scripts/build_evidence_manifest.py","contains":"\"schema_version\": \"1.2\""},
     {"tool":"page-expectations","path":"scripts/verify_page_expectations.py","contains":"fetch_text("}
   ],
   "boundaries": [
@@ -62,11 +62,12 @@
     "Repository-owned HTTP follows validated public-IP pinning on every redirect hop while preserving hostname TLS/SNI.",
     "Third-party SiteOne/Lighthouse/browser fetches run only for explicitly trusted targets and use their native DNS/TLS stack.",
     "SiteOne 2.5.1 forced-IP --resolve is not used for HTTPS because its HTTP fetcher substitutes the URL host with the raw IP while restoring only the Host header, which changes TLS/SNI/certificate semantics and can fail healthy HTTPS targets.",
-    "The SiteOne preflight still rejects requested origins whose DNS answers include non-public addresses before a trusted advanced crawl starts.",
+    "The SiteOne preflight rejects requested origins whose DNS answers include non-public addresses and records the validated origins in reports/siteone-network-preflight.json before a trusted advanced crawl starts.",
     "Nu validates a local safe snapshot and never receives the user target URL as a network input.",
     "Nu tool acquisition resolves the official validator/validator latest vnu.jar at run time, requires exactly one matching asset, requires a GitHub-provided sha256 digest, verifies downloaded bytes against that digest, and records exact release/asset/commit/hash provenance in reports/vnu-tool-metadata.json.",
     "Bounded and sitewide scopes are separate contracts and must never be silently conflated.",
     "Rendered browser evidence and HTTP-response evidence retain separate observation-layer labels.",
+    "Evidence manifest schema 1.2 records generic scope_complete/crawl_limit_reached fields; sitewide legacy aliases are retained only for sitewide compatibility.",
     "A sitewide completeness claim is invalid when the crawl cap is reached or crawl-scope.json says scope_complete=false.",
     "A regression claim requires a compatible successful prior run plus manifest-bound SHA-256 verification of baseline findings and graph artifacts.",
     "New warning/error relationship issues are regressions; new informational relationship observations are not automatically regressions.",
