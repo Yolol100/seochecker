@@ -28,7 +28,7 @@ Set `render_js=true` only when JavaScript can change SEO-relevant output. `repor
 
 ## Regression comparison
 
-A later run can set `baseline_run_id=<earlier successful SEO Audit run>`. The workflow verifies repository, workflow, target, runtime scope, baseline run ID/status/commit and SHA-256 hashes for `technical-findings.json` and `technical-graph.json`. Only then is `reports/regression-diff.json` generated. URL regressions — including newly blocked Googlebot crawlability — and new warning/error relationship issues can fail the run; informational graph observations do not automatically count as regressions.
+A later run can set `baseline_run_id=<earlier successful SEO Audit run>`. The workflow verifies repository, workflow, target, runtime scope, baseline run ID/status/commit, SHA-256 hashes for `technical-findings.json` and `technical-graph.json`, and the supported evidence schemas before comparison. The currently supported comparison set is evidence-manifest schema 1.2 plus technical-findings and technical-graph schema 1.3. Older or unknown schemas fail closed until an explicit migration exists. Only after all compatibility checks pass is `reports/regression-diff.json` generated. URL regressions — including newly blocked Googlebot crawlability — and new warning/error relationship issues can fail the run; informational graph observations do not automatically count as regressions.
 
 ## Sitemap and markup safety
 
