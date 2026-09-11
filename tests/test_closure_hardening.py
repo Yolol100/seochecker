@@ -39,11 +39,13 @@ class ClosureHardeningTests(unittest.TestCase):
             self.assertTrue(vb.validate(m,'https://example.com/','bounded',str(u),500,baseline_run_id='1',run_metadata=meta,findings_path=str(f),graph_path=str(g))['compatible']); g.write_text('x'); self.assertFalse(vb.validate(m,'https://example.com/','bounded',str(u),500,baseline_run_id='1',run_metadata=meta,findings_path=str(f),graph_path=str(g))['compatible'])
     def test_workflow_and_contract(self):
         root=Path(__file__).resolve().parents[1]; w=(root/'.github/workflows/seo-audit.yml').read_text(); c=json.loads((root/'toolkit-contract.json').read_text());
-        for x in ['resolve_audit_request.py','siteone_resolve.py','--single-page','--before-graph','--run-metadata','fetch_html_snapshot.py','reports/target-snapshot.html','Lighthouse CI collection on trusted target','rendered_normalize.outcome','scope_complete']: self.assertIn(x,w)
+        for x in ['resolve_audit_request.py','siteone_resolve.py','--single-page','--before-graph','--run-metadata','fetch_html_snapshot.py','reports/target-snapshot.html','Lighthouse CI collection on trusted target','rendered_normalize.outcome','scope_complete','repos/validator/validator/releases/tags/latest','browser_download_url','vnu-tool-metadata.json','github_release_digest_matched']: self.assertIn(x,w)
+        self.assertNotIn('releases/assets/${VNU_ASSET_ID}',w)
         self.assertIn('sitewide scope requires trusted_render_target=true',(root/'scripts/resolve_audit_request.py').read_text()); self.assertNotIn('slice(0, 500)',w); ids={t['id'] for t in c['tools']}; covered=set()
         for a in c['usage_assertions']:
             self.assertIn(a['contains'],(root/a['path']).read_text(),a['tool']); covered.add(a['tool'])
         self.assertEqual(ids,covered)
+        nu=next(t for t in c['tools'] if t['id']=='nu-html-checker'); self.assertEqual(nu['version'],'official-latest-digest-verified'); self.assertIn('reports/vnu-tool-metadata.json',nu['outputs'])
     def test_snapshot_local_only(self):
         r=SimpleNamespace(status=200,url='https://example.com/f',connected_ip='93.184.216.34',headers=H({'Content-Type':'text/html'}),body=b'<html/>')
         with tempfile.TemporaryDirectory() as d, patch('scripts.fetch_html_snapshot.fetch_bytes',return_value=r), patch('sys.argv',['x','https://example.com/','--output',d+'/x.html','--metadata',d+'/x.json']): self.assertEqual(snap.main(),0)

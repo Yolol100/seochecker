@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.6",
+  "schema_version": "1.7",
   "owner_skill": "seo",
   "project_id": "project-seo",
   "repository": "Yolol100/seochecker",
@@ -19,7 +19,7 @@
     {"id":"regression-baseline","version":"1.1","trigger_when":"baseline_run_id is supplied for scan-fix-retest","outputs":["reports/baseline-validation.json","reports/regression-diff.json"]},
     {"id":"lighthouse-ci","version":"0.15.1","trigger_when":"trusted_render_target=true and lab performance evidence is part of the audit","outputs":["reports/lighthouse-summary.json",".lighthouseci/"]},
     {"id":"safe-html-snapshot","version":"1","trigger_when":"every technical audit before local markup validation","outputs":["reports/target-snapshot.html","reports/target-snapshot.json"]},
-    {"id":"nu-html-checker","version":"asset-515207969","sha256":"c70279e260e5f4f9e95b3890ef6c9548f90ebdaec2a75219ec41694ab6241e34","trigger_when":"every technical audit; validates only the safely fetched local snapshot","outputs":["reports/w3c-nu.json"]},
+    {"id":"nu-html-checker","version":"official-latest-digest-verified","trigger_when":"every technical audit; resolve the current official validator/validator latest vnu.jar and verify its GitHub release SHA-256 before local-only validation","outputs":["reports/vnu-tool-metadata.json","reports/w3c-nu.json"]},
     {"id":"evidence-manifest","version":"1.2","trigger_when":"every technical audit","outputs":["reports/evidence-manifest.json"]},
     {"id":"page-expectations","version":"3","trigger_when":"explicit post-publication expectations are supplied","outputs":["caller-selected JSON report"]}
   ],
@@ -51,7 +51,7 @@
     {"tool":"regression-baseline","path":".github/workflows/seo-audit.yml","contains":"--before-graph"},
     {"tool":"lighthouse-ci","path":".github/workflows/seo-audit.yml","contains":"Lighthouse CI collection on trusted target"},
     {"tool":"safe-html-snapshot","path":".github/workflows/seo-audit.yml","contains":"fetch_html_snapshot.py"},
-    {"tool":"nu-html-checker","path":".github/workflows/seo-audit.yml","contains":"reports/target-snapshot.html"},
+    {"tool":"nu-html-checker","path":".github/workflows/seo-audit.yml","contains":"vnu-tool-metadata.json"},
     {"tool":"evidence-manifest","path":".github/workflows/seo-audit.yml","contains":"build_evidence_manifest.py"},
     {"tool":"page-expectations","path":"scripts/verify_page_expectations.py","contains":"fetch_text("}
   ],
@@ -62,6 +62,7 @@
     "Repository-owned HTTP follows validated public-IP pinning on every redirect hop.",
     "Third-party crawler/browser fetches run only for explicitly trusted targets; SiteOne top-document hosts receive explicit --resolve mappings.",
     "Nu validates a local safe snapshot and never receives the user target URL as a network input.",
+    "Nu tool acquisition resolves the official validator/validator latest vnu.jar at run time, requires exactly one matching asset, requires a GitHub-provided sha256 digest, verifies downloaded bytes against that digest, and records exact release/asset/commit/hash provenance in reports/vnu-tool-metadata.json.",
     "Bounded and sitewide scopes are separate contracts and must never be silently conflated.",
     "Rendered browser evidence and HTTP-response evidence retain separate observation-layer labels.",
     "A sitewide completeness claim is invalid when the crawl cap is reached or crawl-scope.json says scope_complete=false.",
