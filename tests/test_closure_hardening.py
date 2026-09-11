@@ -16,9 +16,11 @@ class ClosureHardeningTests(unittest.TestCase):
     def test_private_dns_rejected(self):
         with patch('scripts.safe_http.socket.getaddrinfo',return_value=[(2,1,6,'',('127.0.0.1',443))]):
             with self.assertRaises(ValueError): safe_http.resolve_public_ips('https://example.com/')
-    def test_siteone_resolve(self):
-        with patch('scripts.siteone_resolve.resolve_public_ips',return_value=['93.184.216.34']): a=siteone_resolve.build_resolves(['https://example.com/a'],False)
-        self.assertEqual(a,['--resolve=example.com:443:93.184.216.34'])
+    def test_siteone_preflight_validates_public_dns_without_forced_ip(self):
+        with patch('scripts.siteone_resolve.resolve_public_ips',return_value=['93.184.216.34']) as resolver:
+            args=siteone_resolve.build_resolves(['https://example.com/a'],False)
+        self.assertEqual(args,[])
+        resolver.assert_called_once_with('https://example.com:443/')
     def test_sitemap_dtd_rejected(self):
         with self.assertRaises(ValueError): sm.parse_locs(b'<!DOCTYPE x [<!ENTITY y "z">]><urlset/>')
     def test_sitewide_keeps_errors_and_unions_render(self):
@@ -41,6 +43,9 @@ class ClosureHardeningTests(unittest.TestCase):
         root=Path(__file__).resolve().parents[1]; w=(root/'.github/workflows/seo-audit.yml').read_text(); c=json.loads((root/'toolkit-contract.json').read_text());
         for x in ['resolve_audit_request.py','siteone_resolve.py','--single-page','--before-graph','--run-metadata','fetch_html_snapshot.py','reports/target-snapshot.html','Lighthouse CI collection on trusted target','rendered_normalize.outcome','scope_complete','repos/validator/validator/releases/tags/latest','browser_download_url','vnu-tool-metadata.json','github_release_digest_matched']: self.assertIn(x,w)
         self.assertNotIn('releases/assets/${VNU_ASSET_ID}',w)
+        preflight=(root/'scripts/siteone_resolve.py').read_text()
+        self.assertIn('intentionally emits no --resolve arguments',preflight)
+        self.assertNotIn('args.append(f"--resolve=',preflight)
         self.assertIn('sitewide scope requires trusted_render_target=true',(root/'scripts/resolve_audit_request.py').read_text()); self.assertNotIn('slice(0, 500)',w); ids={t['id'] for t in c['tools']}; covered=set()
         for a in c['usage_assertions']:
             self.assertIn(a['contains'],(root/a['path']).read_text(),a['tool']); covered.add(a['tool'])
