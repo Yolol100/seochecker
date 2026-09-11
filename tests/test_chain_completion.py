@@ -80,7 +80,9 @@ class BaselineAndContractTests(unittest.TestCase):
 
     def test_workflow_and_toolkit_have_all_hard_gates(self):
         text=(ROOT/".github/workflows/seo-audit.yml").read_text(encoding="utf-8")
-        for value in ["--single-page","--max-visited-urls","crawl_scope","trusted_render_target","baseline_run_id","validate_baseline.py","regression-diff.json","rendered-technical-findings.json","runtime URL list exceeds hard cap 500"]: self.assertIn(value,text)
+        resolver=(ROOT/"scripts/resolve_audit_request.py").read_text(encoding="utf-8")
+        for value in ["--single-page","--max-visited-urls","crawl_scope","trusted_render_target","baseline_run_id","validate_baseline.py","regression-diff.json","rendered-technical-findings.json","resolve_audit_request.py"]: self.assertIn(value,text)
+        self.assertIn("runtime URL list exceeds hard cap 500",resolver)
         self.assertNotIn("slice(0, 500)",text)
         import json
         contract=json.loads((ROOT/"toolkit-contract.json").read_text(encoding="utf-8")); self.assertEqual({x["id"] for x in contract["tools"]},{x["tool"] for x in contract["usage_assertions"]})
