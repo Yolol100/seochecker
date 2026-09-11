@@ -19,17 +19,47 @@ on:
         required: true
         type: string
       url_list:
-        description: "Optioneel: extra publieke URL's, een per regel. Blijft runtime-input."
+        description: "Optioneel: extra publieke URL's, een per regel; maximaal 500"
         required: false
         type: string
+      crawl_scope:
+        description: "bounded = exact de opgegeven URL's; sitewide = discovery met harde cap"
+        required: true
+        default: bounded
+        type: choice
+        options: [bounded, sitewide]
+      sitewide_max_urls:
+        description: "Harde cap voor sitewide discovery (1-5000)"
+        required: false
+        default: "500"
+        type: string
       render_js:
-        description: "Voer daarnaast een SiteOne browser/rendered-DOM crawl uit"
+        description: "Voer aanvullend een SiteOne browser/rendered-DOM crawl uit"
         required: false
         default: false
         type: boolean
+      trusted_render_target:
+        description: "Bevestig dat dit een vertrouwd/eigen target is voor third-party crawler/browser requests"
+        required: false
+        default: false
+        type: boolean
+      baseline_run_id:
+        description: "Optioneel: eerdere SEO Audit run-id voor automatische voor/na-regressiediff"
+        required: false
+        type: string
+      fail_on_regression:
+        description: "Laat de audit falen bij regressies tegen de baseline"
+        required: false
+        default: true
+        type: boolean
+      source_set_version:
+        description: "Optionele actieve Project SEO source-set versie voor provenance"
+        required: false
+        type: string
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   self-test:
@@ -62,7 +92,12 @@ jobs:
       target_url: ${{ steps.resolve.outputs.target_url }}
       source_set_version: ${{ steps.resolve.outputs.source_set_version }}
       url_list_b64: ${{ steps.resolve.outputs.url_list_b64 }}
+      crawl_scope: ${{ steps.resolve.outputs.crawl_scope }}
+      sitewide_max_urls: ${{ steps.resolve.outputs.sitewide_max_urls }}
       render_js: ${{ steps.resolve.outputs.render_js }}
+      trusted_render_target: ${{ steps.resolve.outputs.trusted_render_target }}
+      baseline_run_id: ${{ steps.resolve.outputs.baseline_run_id }}
+      fail_on_regression: ${{ steps.resolve.outputs.fail_on_regression }}
     steps:
       - name: Checkout request
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -72,75 +107,36 @@ jobs:
         env:
           DISPATCH_URL: ${{ inputs.url }}
           DISPATCH_URL_LIST: ${{ inputs.url_list }}
+          DISPATCH_CRAWL_SCOPE: ${{ inputs.crawl_scope }}
+          DISPATCH_SITEWIDE_MAX_URLS: ${{ inputs.sitewide_max_urls }}
           DISPATCH_RENDER_JS: ${{ inputs.render_js }}
-        run: |
-          node <<'NODE'
-          const fs = require('fs');
-          const out = process.env.GITHUB_OUTPUT;
-          const write = (k, v) => fs.appendFileSync(out, `${k}=${String(v)}\n`);
-          const safeText = (v) => typeof v === 'string' && v.trim().length > 0 && !/[\r\n]/.test(v);
-          const safeId = (v) => typeof v === 'string' && /^[A-Za-z0-9._-]{3,80}$/.test(v);
-          const publicUrl = (v) => { const u = new URL(v); if (!['http:', 'https:'].includes(u.protocol)) throw new Error('URL must be HTTP(S)'); return u.toString(); };
-          let run = false;
-          let requestId = 'none';
-          let targetUrl = '';
-          let sourceSetVersion = '';
-          let urls = [];
-          let renderJs = false;
-          if (process.env.GITHUB_EVENT_NAME === 'workflow_dispatch') {
-            targetUrl = publicUrl(process.env.DISPATCH_URL || '');
-            urls = [targetUrl];
-            for (const raw of String(process.env.DISPATCH_URL_LIST || '').split(/\r?\n/)) {
-              const value = raw.trim();
-              if (value) urls.push(publicUrl(value));
-            }
-            renderJs = String(process.env.DISPATCH_RENDER_JS || '').toLowerCase() === 'true';
-            run = true;
-            requestId = `dispatch-${process.env.GITHUB_RUN_ID}`;
-          } else if (fs.existsSync('requests/audit.json')) {
-            const req = JSON.parse(fs.readFileSync('requests/audit.json', 'utf8'));
-            if (req.enabled === true) {
-              if (!safeId(req.request_id)) throw new Error('invalid request_id');
-              if (req.owner !== 'seo' || req.project_id !== 'project-seo') throw new Error('request owner/project mismatch');
-              for (const key of ['for', 'task', 'why', 'trigger_when', 'do_not_trigger_when', 'requested_by']) {
-                if (!safeText(req[key])) throw new Error(`missing or unsafe ${key}`);
-              }
-              if (!req.source_context || req.source_context.project_id !== 'project-seo' || !safeText(req.source_context.source_set_version)) {
-                throw new Error('invalid source_context');
-              }
-              targetUrl = publicUrl(req.url || '');
-              urls = [targetUrl];
-              if (Array.isArray(req.urls)) for (const value of req.urls) urls.push(publicUrl(value));
-              renderJs = req.render_js === true;
-              sourceSetVersion = req.source_context.source_set_version.trim();
-              run = true;
-              requestId = req.request_id;
-            }
-          }
-          urls = [...new Set(urls)].slice(0, 500);
-          write('run', run ? 'true' : 'false');
-          write('request_id', requestId);
-          write('target_url', targetUrl);
-          write('source_set_version', sourceSetVersion);
-          write('url_list_b64', Buffer.from(urls.join('\n'), 'utf8').toString('base64'));
-          write('render_js', renderJs ? 'true' : 'false');
-          NODE
+          DISPATCH_TRUSTED_RENDER_TARGET: ${{ inputs.trusted_render_target }}
+          DISPATCH_BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
+          DISPATCH_FAIL_ON_REGRESSION: ${{ inputs.fail_on_regression }}
+          DISPATCH_SOURCE_SET_VERSION: ${{ inputs.source_set_version }}
+        run: python3 scripts/resolve_audit_request.py --event-name "$GITHUB_EVENT_NAME"
 
   audit:
     if: needs.resolve-request.outputs.run == 'true'
     needs: [self-test, resolve-request]
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
     env:
       TARGET_URL: ${{ needs.resolve-request.outputs.target_url }}
       REQUEST_ID: ${{ needs.resolve-request.outputs.request_id }}
       SOURCE_SET_VERSION: ${{ needs.resolve-request.outputs.source_set_version }}
       URL_LIST_B64: ${{ needs.resolve-request.outputs.url_list_b64 }}
+      CRAWL_SCOPE: ${{ needs.resolve-request.outputs.crawl_scope }}
+      SITEWIDE_MAX_URLS: ${{ needs.resolve-request.outputs.sitewide_max_urls }}
       RENDER_JS: ${{ needs.resolve-request.outputs.render_js }}
+      TRUSTED_RENDER_TARGET: ${{ needs.resolve-request.outputs.trusted_render_target }}
+      BASELINE_RUN_ID: ${{ needs.resolve-request.outputs.baseline_run_id }}
+      FAIL_ON_REGRESSION: ${{ needs.resolve-request.outputs.fail_on_regression }}
       SITEONE_VERSION: "2.5.1"
       SITEONE_SHA256: "09278d958d4a087fa46093805cd33b085b96618001dd31d45c448ad724c9024e"
       VNU_ASSET_ID: "515207969"
       VNU_SHA256: "c70279e260e5f4f9e95b3890ef6c9548f90ebdaec2a75219ec41694ab6241e34"
+      GH_TOKEN: ${{ github.token }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -151,36 +147,22 @@ jobs:
           cache: npm
       - name: Install locked Node tooling
         run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Prepare bounded runtime URL list
+      - name: Prepare strict runtime URL list
         run: |
-          mkdir -p reports tools/siteone
+          mkdir -p reports tools/siteone baseline
           printf '%s' "$URL_LIST_B64" | base64 --decode > reports/runtime-urls.txt
           test -s reports/runtime-urls.txt
-          while IFS= read -r url; do
-            [ -z "$url" ] || python3 scripts/validate_target.py "$url"
-          done < reports/runtime-urls.txt
-      - name: Core SEO and indexability check
+          count="$(grep -cve '^$' reports/runtime-urls.txt)"
+          test "$count" -ge 1
+          test "$count" -le 500
+          while IFS= read -r url; do [ -z "$url" ] || python3 scripts/validate_target.py "$url"; done < reports/runtime-urls.txt
+      - name: Core SEO and indexability observation
         id: basic
         continue-on-error: true
-        run: python3 scripts/seo_basic_check.py "$TARGET_URL" --output reports/basic-seo.json --fail-on-indexability
-      - name: Stable bounded URL batch evidence
-        id: batch
-        continue-on-error: true
-        run: python3 scripts/run_url_batch.py --url-list reports/runtime-urls.txt --output reports/url-batch.json --max-urls 500
-      - name: Normalize technical findings
-        id: normalize
-        if: steps.batch.outcome == 'success'
-        run: python3 scripts/technical_evidence.py normalize --input reports/url-batch.json --output reports/technical-findings.json --graph-output reports/technical-graph.json
-      - name: Extract discovered sitemap URLs
-        id: sitemap
-        if: steps.batch.outcome == 'success'
-        continue-on-error: true
-        run: python3 scripts/extract_sitemap_urls.py --input reports/url-batch.json --output reports/sitemap-urls.txt --report reports/sitemap-extraction.json
-      - name: Reconcile crawl and sitemap
-        id: reconcile
-        if: steps.normalize.outcome == 'success' && steps.sitemap.outcome == 'success'
-        run: python3 scripts/technical_evidence.py normalize --input reports/url-batch.json --output reports/technical-findings.json --sitemap-list reports/sitemap-urls.txt --graph-output reports/technical-graph.json
+        run: python3 scripts/seo_basic_check.py "$TARGET_URL" --output reports/basic-seo.json
       - name: Install pinned SiteOne Crawler
+        id: install_siteone
+        if: env.TRUSTED_RENDER_TARGET == 'true'
         run: |
           curl -fsSL "https://github.com/janreges/siteone-crawler/releases/download/v${SITEONE_VERSION}/siteone-crawler-v${SITEONE_VERSION}-linux-x64.tar.gz" -o /tmp/siteone.tar.gz
           echo "${SITEONE_SHA256}  /tmp/siteone.tar.gz" | sha256sum -c -
@@ -188,108 +170,168 @@ jobs:
           SITEONE_BIN="$(find tools/siteone -type f -name siteone-crawler -perm -111 | head -n 1)"
           test -n "$SITEONE_BIN"
           echo "SITEONE_BIN=$SITEONE_BIN" >> "$GITHUB_ENV"
-      - name: SiteOne technical crawl
+      - name: Build pinned SiteOne DNS mappings
+        id: siteone_resolve
+        if: env.TRUSTED_RENDER_TARGET == 'true' && steps.install_siteone.outcome == 'success'
+        run: python3 scripts/siteone_resolve.py --url-list reports/runtime-urls.txt --output reports/siteone-resolve-args.txt
+      - name: SiteOne HTTP crawl with explicit scope
         id: siteone
+        if: env.TRUSTED_RENDER_TARGET == 'true' && steps.siteone_resolve.outcome == 'success'
         continue-on-error: true
+        shell: bash
         run: |
-          "$SITEONE_BIN" \
-            --url="$TARGET_URL" \
-            --url-list=reports/runtime-urls.txt \
-            --max-reqs-per-sec=5 \
-            --output-html-report=reports/siteone.html \
-            --output-json-file=reports/siteone.json \
-            --output-text-file=reports/siteone.txt
+          mapfile -t RESOLVE_ARGS < reports/siteone-resolve-args.txt
+          if [ "$CRAWL_SCOPE" = "bounded" ]; then
+            "$SITEONE_BIN" "${RESOLVE_ARGS[@]}" --url-list=reports/runtime-urls.txt --single-page --disable-all-assets --max-visited-urls=500 --max-queue-length=1000 --max-reqs-per-sec=5 --output-html-report=reports/siteone.html --output-json-file=reports/siteone.json --output-text-file=reports/siteone.txt
+          else
+            queue_limit=$(( SITEWIDE_MAX_URLS * 2 )); [ "$queue_limit" -lt 1000 ] && queue_limit=1000; [ "$queue_limit" -gt 10000 ] && queue_limit=10000
+            "$SITEONE_BIN" "${RESOLVE_ARGS[@]}" --url="$TARGET_URL" --disable-all-assets --max-visited-urls="$SITEWIDE_MAX_URLS" --max-queue-length="$queue_limit" --max-reqs-per-sec=5 --output-html-report=reports/siteone.html --output-json-file=reports/siteone.json --output-text-file=reports/siteone.txt
+          fi
       - name: SiteOne rendered browser crawl
         id: siteone_rendered
-        if: env.RENDER_JS == 'true'
+        if: env.RENDER_JS == 'true' && env.TRUSTED_RENDER_TARGET == 'true' && steps.siteone_resolve.outcome == 'success'
         continue-on-error: true
+        shell: bash
         run: |
-          "$SITEONE_BIN" \
-            --url="$TARGET_URL" \
-            --url-list=reports/runtime-urls.txt \
-            --browser \
-            --max-reqs-per-sec=3 \
-            --output-html-report=reports/siteone-rendered.html \
-            --output-json-file=reports/siteone-rendered.json \
-            --output-text-file=reports/siteone-rendered.txt
-      - name: Lighthouse CI collection
+          mapfile -t RESOLVE_ARGS < reports/siteone-resolve-args.txt
+          EXTRA="Title(500>),Description(1000>),H1=xpath://h1/text()(500>),Canonical=xpath://link[@rel='canonical']/@href(2048>),Robots=xpath://meta[@name='robots']/@content(500>)"
+          if [ "$CRAWL_SCOPE" = "bounded" ]; then
+            "$SITEONE_BIN" "${RESOLVE_ARGS[@]}" --url-list=reports/runtime-urls.txt --single-page --browser --disable-images --disable-fonts --disable-files --max-visited-urls=500 --max-queue-length=1000 --max-reqs-per-sec=3 --extra-columns="$EXTRA" --output-html-report=reports/siteone-rendered.html --output-json-file=reports/siteone-rendered.json --output-text-file=reports/siteone-rendered.txt
+          else
+            queue_limit=$(( SITEWIDE_MAX_URLS * 2 )); [ "$queue_limit" -lt 1000 ] && queue_limit=1000; [ "$queue_limit" -gt 10000 ] && queue_limit=10000
+            "$SITEONE_BIN" "${RESOLVE_ARGS[@]}" --url="$TARGET_URL" --browser --disable-images --disable-fonts --disable-files --max-visited-urls="$SITEWIDE_MAX_URLS" --max-queue-length="$queue_limit" --max-reqs-per-sec=3 --extra-columns="$EXTRA" --output-html-report=reports/siteone-rendered.html --output-json-file=reports/siteone-rendered.json --output-text-file=reports/siteone-rendered.txt
+          fi
+      - name: Resolve effective crawl scope
+        id: scope
+        shell: bash
+        run: |
+          if [ "$CRAWL_SCOPE" = "bounded" ]; then
+            cp reports/runtime-urls.txt reports/effective-urls.txt
+            python3 scripts/siteone_scope.py bounded-report --url-list reports/effective-urls.txt --report reports/crawl-scope.json
+          else
+            test "${{ steps.siteone.outcome }}" = "success"
+            args=(extract-urls --input reports/siteone.json --seed-list reports/runtime-urls.txt --output reports/effective-urls.txt --report reports/crawl-scope.json --max-urls "$SITEWIDE_MAX_URLS")
+            if [ "$RENDER_JS" = "true" ] && [ "${{ steps.siteone_rendered.outcome }}" = "success" ]; then args+=(--input reports/siteone-rendered.json); fi
+            python3 scripts/siteone_scope.py "${args[@]}"
+          fi
+      - name: Stable effective URL batch evidence
+        id: batch
+        if: steps.scope.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          max_urls=500
+          if [ "$CRAWL_SCOPE" = "sitewide" ]; then max_urls="$SITEWIDE_MAX_URLS"; fi
+          python3 scripts/run_url_batch.py --url-list reports/effective-urls.txt --output reports/url-batch.json --max-urls "$max_urls"
+      - name: Extract discovered sitemap URLs
+        id: sitemap
+        if: steps.batch.outcome == 'success'
+        continue-on-error: true
+        run: python3 scripts/extract_sitemap_urls.py --input reports/url-batch.json --output reports/sitemap-urls.txt --report reports/sitemap-extraction.json --max-urls 10000 --max-sitemaps 100 --max-bytes 20000000 --max-decompressed-bytes 50000000
+      - name: Normalize technical findings and graph
+        id: normalize
+        if: steps.batch.outcome == 'success'
+        shell: bash
+        run: |
+          args=(normalize --input reports/url-batch.json --output reports/technical-findings.json --graph-output reports/technical-graph.json)
+          if [ -s reports/sitemap-urls.txt ]; then args+=(--sitemap-list reports/sitemap-urls.txt); fi
+          if [ "$CRAWL_SCOPE" = "sitewide" ] && python3 -c 'import json,sys; sys.exit(0 if json.load(open("reports/crawl-scope.json"))["scope_complete"] else 1)'; then args+=(--scope-complete); fi
+          python3 scripts/technical_evidence.py "${args[@]}"
+      - name: Normalize rendered evidence coverage
+        id: rendered_normalize
+        if: env.RENDER_JS == 'true' && steps.siteone_rendered.outcome == 'success' && steps.scope.outcome == 'success'
+        continue-on-error: true
+        run: python3 scripts/siteone_scope.py normalize-rendered --input reports/siteone-rendered.json --requested-list reports/effective-urls.txt --output reports/rendered-technical-findings.json
+      - name: Download and validate compatible baseline
+        id: baseline
+        if: env.BASELINE_RUN_ID != '' && steps.normalize.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          gh run view "$BASELINE_RUN_ID" --repo "$GITHUB_REPOSITORY" --json databaseId,headSha,conclusion,status,event,name > baseline/run-metadata.json
+          gh run download "$BASELINE_RUN_ID" --repo "$GITHUB_REPOSITORY" -n seo-audit-report -D baseline/artifact
+          BASE_MANIFEST="$(find baseline/artifact -type f -name evidence-manifest.json -print -quit)"
+          BASE_FINDINGS="$(find baseline/artifact -type f -name technical-findings.json -print -quit)"
+          BASE_GRAPH="$(find baseline/artifact -type f -name technical-graph.json -print -quit)"
+          test -n "$BASE_MANIFEST" && test -n "$BASE_FINDINGS" && test -n "$BASE_GRAPH"
+          echo "BASE_FINDINGS=$BASE_FINDINGS" >> "$GITHUB_ENV"
+          echo "BASE_GRAPH=$BASE_GRAPH" >> "$GITHUB_ENV"
+          python3 scripts/validate_baseline.py --manifest "$BASE_MANIFEST" --target-url "$TARGET_URL" --crawl-scope "$CRAWL_SCOPE" --runtime-url-list reports/runtime-urls.txt --sitewide-max-urls "$SITEWIDE_MAX_URLS" --baseline-run-id "$BASELINE_RUN_ID" --run-metadata baseline/run-metadata.json --findings "$BASE_FINDINGS" --graph "$BASE_GRAPH" --output reports/baseline-validation.json
+      - name: Compare baseline to current run
+        id: regression
+        if: env.BASELINE_RUN_ID != '' && steps.baseline.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          args=(diff --before "$BASE_FINDINGS" --after reports/technical-findings.json --before-graph "$BASE_GRAPH" --after-graph reports/technical-graph.json --output reports/regression-diff.json)
+          if [ "$FAIL_ON_REGRESSION" = "true" ]; then args+=(--fail-on-regression); fi
+          python3 scripts/technical_evidence.py "${args[@]}"
+      - name: Lighthouse CI collection on trusted target
         id: lighthouse
+        if: env.TRUSTED_RENDER_TARGET == 'true'
         continue-on-error: true
         run: npx --no-install lhci collect --url="$TARGET_URL" --numberOfRuns=3
       - name: Normalize Lighthouse evidence
         id: lighthouse_summary
         if: steps.lighthouse.outcome == 'success'
+        continue-on-error: true
         run: python3 scripts/lighthouse_summary.py --input-dir .lighthouseci --output reports/lighthouse-summary.json
+      - name: Fetch safe local HTML snapshot for Nu
+        id: snapshot
+        continue-on-error: true
+        run: python3 scripts/fetch_html_snapshot.py "$TARGET_URL" --output reports/target-snapshot.html --metadata reports/target-snapshot.json
       - name: Set up Java 17 for local Nu Checker
+        if: steps.snapshot.outcome == 'success'
         uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
         with:
           distribution: temurin
           java-version: '17'
       - name: Install pinned local Nu HTML Checker
+        id: install_vnu
+        if: steps.snapshot.outcome == 'success'
         run: |
-          curl -fsSL \
-            -H "Accept: application/octet-stream" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/repos/validator/validator/releases/assets/${VNU_ASSET_ID}" \
-            -o tools/vnu.jar
+          curl -fsSL -H "Accept: application/octet-stream" -H "X-GitHub-Api-Version: 2022-11-28" "https://api.github.com/repos/validator/validator/releases/assets/${VNU_ASSET_ID}" -o tools/vnu.jar
           echo "${VNU_SHA256}  tools/vnu.jar" | sha256sum -c -
           java -jar tools/vnu.jar --version
-      - name: Local Nu HTML validation
+      - name: Local Nu HTML validation from safe snapshot
         id: vnu
+        if: steps.install_vnu.outcome == 'success'
         continue-on-error: true
         run: |
-          java -jar tools/vnu.jar \
-            --exit-zero-always \
-            --stdout \
-            --format json \
-            "$TARGET_URL" > reports/w3c-nu.json
+          java -jar tools/vnu.jar --exit-zero-always --stdout --format json reports/target-snapshot.html > reports/w3c-nu.json
           test -s reports/w3c-nu.json
       - name: Build evidence manifest
         id: evidence_manifest
         if: always()
         run: |
-          python3 scripts/build_evidence_manifest.py \
-            --workflow "SEO Audit" \
-            --target-url "$TARGET_URL" \
-            --request-id "$REQUEST_ID" \
-            --source-set-version "$SOURCE_SET_VERSION" \
-            --artifact runtime-urls=reports/runtime-urls.txt \
-            --artifact basic=reports/basic-seo.json \
-            --artifact url-batch=reports/url-batch.json \
-            --artifact technical-findings=reports/technical-findings.json \
-            --artifact technical-graph=reports/technical-graph.json \
-            --artifact sitemap-extraction=reports/sitemap-extraction.json \
-            --artifact sitemap-urls=reports/sitemap-urls.txt \
-            --artifact siteone-json=reports/siteone.json \
-            --artifact siteone-html=reports/siteone.html \
-            --artifact siteone-rendered-json=reports/siteone-rendered.json \
-            --artifact siteone-rendered-html=reports/siteone-rendered.html \
-            --artifact lighthouse-summary=reports/lighthouse-summary.json \
-            --artifact lighthouse-raw=.lighthouseci \
-            --artifact w3c-nu=reports/w3c-nu.json \
-            --output reports/evidence-manifest.json
+          python3 scripts/build_evidence_manifest.py --workflow "SEO Audit" --target-url "$TARGET_URL" --request-id "$REQUEST_ID" --source-set-version "$SOURCE_SET_VERSION" --crawl-scope "$CRAWL_SCOPE" --runtime-url-list reports/runtime-urls.txt --sitewide-max-urls "$SITEWIDE_MAX_URLS" --baseline-run-id "$BASELINE_RUN_ID" --scope-report reports/crawl-scope.json --artifact runtime-urls=reports/runtime-urls.txt --artifact effective-urls=reports/effective-urls.txt --artifact crawl-scope=reports/crawl-scope.json --artifact basic=reports/basic-seo.json --artifact url-batch=reports/url-batch.json --artifact technical-findings=reports/technical-findings.json --artifact technical-graph=reports/technical-graph.json --artifact sitemap-extraction=reports/sitemap-extraction.json --artifact sitemap-urls=reports/sitemap-urls.txt --artifact siteone-resolve-args=reports/siteone-resolve-args.txt --artifact siteone-json=reports/siteone.json --artifact siteone-html=reports/siteone.html --artifact siteone-rendered-json=reports/siteone-rendered.json --artifact siteone-rendered-html=reports/siteone-rendered.html --artifact rendered-technical-findings=reports/rendered-technical-findings.json --artifact baseline-validation=reports/baseline-validation.json --artifact regression-diff=reports/regression-diff.json --artifact lighthouse-summary=reports/lighthouse-summary.json --artifact lighthouse-raw=.lighthouseci --artifact target-snapshot=reports/target-snapshot.html --artifact target-snapshot-metadata=reports/target-snapshot.json --artifact w3c-nu=reports/w3c-nu.json --output reports/evidence-manifest.json
       - name: Write audit summary
         if: always()
         run: |
           {
-            echo "## SEO Audit"
-            echo ""
+            echo "## SEO Audit"; echo ""
             echo "Request: $REQUEST_ID"
             echo "Source set: ${SOURCE_SET_VERSION:-not-provided}"
             echo "Target: $TARGET_URL"
+            echo "Scope: $CRAWL_SCOPE"
+            echo "Trusted advanced audit: $TRUSTED_RENDER_TARGET"
             echo "Rendered crawl requested: $RENDER_JS"
-            echo ""
-            echo "| Controle | Status |"
-            echo "|---|---|"
-            echo "| Indexability/basic SEO | ${{ steps.basic.outcome }} |"
-            echo "| Bounded URL batch | ${{ steps.batch.outcome }} |"
-            echo "| Technical normalization | ${{ steps.normalize.outcome }} |"
-            echo "| Sitemap extraction | ${{ steps.sitemap.outcome }} |"
-            echo "| Sitemap reconciliation | ${{ steps.reconcile.outcome }} |"
-            echo "| SiteOne crawl | ${{ steps.siteone.outcome }} |"
+            echo "Baseline run: ${BASELINE_RUN_ID:-none}"
+            echo ""; echo "| Controle | Status |"; echo "|---|---|"
+            echo "| Core safe HTTP | ${{ steps.basic.outcome }} |"
+            echo "| SiteOne DNS map | ${{ steps.siteone_resolve.outcome }} |"
+            echo "| SiteOne HTTP crawl | ${{ steps.siteone.outcome }} |"
             echo "| SiteOne rendered crawl | ${{ steps.siteone_rendered.outcome }} |"
+            echo "| Scope resolution | ${{ steps.scope.outcome }} |"
+            echo "| Effective URL batch | ${{ steps.batch.outcome }} |"
+            echo "| Sitemap extraction | ${{ steps.sitemap.outcome }} |"
+            echo "| Technical normalization | ${{ steps.normalize.outcome }} |"
+            echo "| Rendered normalization | ${{ steps.rendered_normalize.outcome }} |"
+            echo "| Baseline validation | ${{ steps.baseline.outcome }} |"
+            echo "| Regression diff | ${{ steps.regression.outcome }} |"
             echo "| Lighthouse CI | ${{ steps.lighthouse.outcome }} |"
             echo "| Lighthouse summary | ${{ steps.lighthouse_summary.outcome }} |"
+            echo "| Safe HTML snapshot | ${{ steps.snapshot.outcome }} |"
             echo "| Local Nu HTML | ${{ steps.vnu.outcome }} |"
             echo "| Evidence manifest | ${{ steps.evidence_manifest.outcome }} |"
           } >> "$GITHUB_STEP_SUMMARY"
@@ -303,20 +345,37 @@ jobs:
             .lighthouseci/
           if-no-files-found: warn
           retention-days: 14
-      - name: Enforce critical execution gate
+      - name: Enforce critical execution and evidence gates
         if: always()
+        shell: bash
         run: |
           failed=0
           [ "${{ steps.basic.outcome }}" = "success" ] || failed=1
+          [ "${{ steps.scope.outcome }}" = "success" ] || failed=1
           [ "${{ steps.batch.outcome }}" = "success" ] || failed=1
           [ "${{ steps.normalize.outcome }}" = "success" ] || failed=1
-          [ "${{ steps.siteone.outcome }}" = "success" ] || failed=1
-          if [ "$RENDER_JS" = "true" ]; then [ "${{ steps.siteone_rendered.outcome }}" = "success" ] || failed=1; fi
-          [ "${{ steps.lighthouse.outcome }}" = "success" ] || failed=1
-          [ "${{ steps.lighthouse_summary.outcome }}" = "success" ] || failed=1
+          [ "${{ steps.snapshot.outcome }}" = "success" ] || failed=1
           [ "${{ steps.vnu.outcome }}" = "success" ] || failed=1
           [ "${{ steps.evidence_manifest.outcome }}" = "success" ] || failed=1
+          if [ "$TRUSTED_RENDER_TARGET" = "true" ]; then
+            [ "${{ steps.siteone_resolve.outcome }}" = "success" ] || failed=1
+            [ "${{ steps.siteone.outcome }}" = "success" ] || failed=1
+            [ "${{ steps.lighthouse.outcome }}" = "success" ] || failed=1
+            [ "${{ steps.lighthouse_summary.outcome }}" = "success" ] || failed=1
+          fi
+          if [ "$RENDER_JS" = "true" ]; then
+            [ "${{ steps.siteone_rendered.outcome }}" = "success" ] || failed=1
+            [ "${{ steps.rendered_normalize.outcome }}" = "success" ] || failed=1
+          fi
+          if [ "$CRAWL_SCOPE" = "sitewide" ]; then
+            [ "$TRUSTED_RENDER_TARGET" = "true" ] || failed=1
+            python3 -c 'import json,sys; sys.exit(0 if json.load(open("reports/crawl-scope.json"))["scope_complete"] else 1)' || failed=1
+          fi
+          if [ -n "$BASELINE_RUN_ID" ]; then
+            [ "${{ steps.baseline.outcome }}" = "success" ] || failed=1
+            if [ "$FAIL_ON_REGRESSION" = "true" ]; then [ "${{ steps.regression.outcome }}" = "success" ] || failed=1; fi
+          fi
           if [ "$failed" -ne 0 ]; then
-            echo "Een of meer kerncontroles zijn niet succesvol uitgevoerd. Bekijk de artefacts en logs."
+            echo "Een of meer kerncontroles/evidence-gates zijn niet succesvol. Bekijk artifacts en logs."
             exit 1
           fi

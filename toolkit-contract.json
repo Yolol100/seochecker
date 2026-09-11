@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.4",
+  "schema_version": "1.6",
   "owner_skill": "seo",
   "project_id": "project-seo",
   "repository": "Yolol100/seochecker",
@@ -8,99 +8,67 @@
   "requires_api_key": false,
   "requires_mcp": false,
   "tools": [
-    {
-      "id": "core-indexability",
-      "version": "repo",
-      "trigger_when": "every technical audit",
-      "outputs": ["reports/basic-seo.json"]
-    },
-    {
-      "id": "siteone",
-      "version": "2.5.1",
-      "trigger_when": "every technical audit",
-      "outputs": ["reports/siteone.json", "reports/siteone.html"]
-    },
-    {
-      "id": "siteone-browser",
-      "version": "2.5.1",
-      "trigger_when": "rendered DOM evidence can change the technical SEO decision",
-      "outputs": ["reports/siteone-rendered.json", "reports/siteone-rendered.html"]
-    },
-    {
-      "id": "bounded-url-list",
-      "version": "1",
-      "trigger_when": "the SEO owner supplies a bounded runtime URL set from GSC, Ahrefs, sitemap or another source",
-      "outputs": ["reports/runtime-urls.txt"]
-    },
-    {
-      "id": "technical-evidence",
-      "version": "1.0",
-      "trigger_when": "technical crawl output must be consumed by another skill or compared across runs",
-      "outputs": ["reports/technical-findings.json", "reports/technical-graph.json", "reports/regression-diff.json"]
-    },
-    {
-      "id": "lighthouse-ci",
-      "version": "0.15.1",
-      "trigger_when": "every technical audit",
-      "outputs": ["reports/lighthouse-summary.json", ".lighthouseci/"]
-    },
-    {
-      "id": "nu-html-checker",
-      "version": "asset-515207969",
-      "sha256": "c70279e260e5f4f9e95b3890ef6c9548f90ebdaec2a75219ec41694ab6241e34",
-      "trigger_when": "every technical audit",
-      "outputs": ["reports/w3c-nu.json"]
-    },
-    {
-      "id": "evidence-manifest",
-      "version": "1.1",
-      "trigger_when": "every technical audit",
-      "outputs": ["reports/evidence-manifest.json"]
-    },
-    {
-      "id": "page-expectations",
-      "version": "2",
-      "trigger_when": "explicit post-publication expectations are supplied",
-      "outputs": ["caller-selected JSON report"]
-    }
+    {"id":"safe-http","version":"1.6","trigger_when":"every repository-owned HTTP, redirect, sitemap or snapshot request","outputs":["pinned public-IP HTTP observations"]},
+    {"id":"core-indexability","version":"repo","trigger_when":"every technical audit","outputs":["reports/basic-seo.json"]},
+    {"id":"siteone-resolve","version":"1","trigger_when":"trusted_render_target=true before any SiteOne network crawl","outputs":["reports/siteone-resolve-args.txt"]},
+    {"id":"siteone","version":"2.5.1","trigger_when":"trusted_render_target=true; required for sitewide discovery","outputs":["reports/siteone.json","reports/siteone.html"]},
+    {"id":"siteone-browser","version":"2.5.1","trigger_when":"rendered DOM evidence can change the decision and trusted_render_target=true","outputs":["reports/siteone-rendered.json","reports/siteone-rendered.html","reports/rendered-technical-findings.json"]},
+    {"id":"bounded-url-list","version":"2","trigger_when":"SEO supplies a bounded runtime URL set from GSC, Ahrefs, sitemap or another source","outputs":["reports/runtime-urls.txt","reports/effective-urls.txt","reports/crawl-scope.json"]},
+    {"id":"sitewide-discovery","version":"2","trigger_when":"trusted target and caller explicitly requests sitewide scope with a hard URL cap","outputs":["reports/effective-urls.txt","reports/crawl-scope.json"]},
+    {"id":"technical-evidence","version":"1.2","trigger_when":"technical output must be normalized, related or compared","outputs":["reports/technical-findings.json","reports/technical-graph.json"]},
+    {"id":"regression-baseline","version":"1.1","trigger_when":"baseline_run_id is supplied for scan-fix-retest","outputs":["reports/baseline-validation.json","reports/regression-diff.json"]},
+    {"id":"lighthouse-ci","version":"0.15.1","trigger_when":"trusted_render_target=true and lab performance evidence is part of the audit","outputs":["reports/lighthouse-summary.json",".lighthouseci/"]},
+    {"id":"safe-html-snapshot","version":"1","trigger_when":"every technical audit before local markup validation","outputs":["reports/target-snapshot.html","reports/target-snapshot.json"]},
+    {"id":"nu-html-checker","version":"asset-515207969","sha256":"c70279e260e5f4f9e95b3890ef6c9548f90ebdaec2a75219ec41694ab6241e34","trigger_when":"every technical audit; validates only the safely fetched local snapshot","outputs":["reports/w3c-nu.json"]},
+    {"id":"evidence-manifest","version":"1.2","trigger_when":"every technical audit","outputs":["reports/evidence-manifest.json"]},
+    {"id":"page-expectations","version":"3","trigger_when":"explicit post-publication expectations are supplied","outputs":["caller-selected JSON report"]}
   ],
   "input_contract": {
     "owner": "seo",
     "runtime_only": true,
+    "crawl_scopes": {
+      "bounded": "exact explicit runtime URL set; safe repository-owned checks always run; SiteOne/Lighthouse require trusted_render_target=true",
+      "sitewide": "trusted target only; SiteOne same-scope discovery with an explicit max URL cap; completeness only when crawl-scope.json says scope_complete=true"
+    },
     "allowed": [
       "single public target URL",
-      "bounded public URL list selected by SEO from GSC/Ahrefs/sitemap/other evidence",
-      "optional previous normalized technical-findings artifact for regression comparison",
-      "optional sitemap URL list for reconciliation"
+      "maximum 500 public runtime URLs selected by SEO from GSC/Ahrefs/sitemap/other evidence",
+      "optional trusted third-party crawler/browser evidence",
+      "optional prior successful SEO Audit run id for hash-bound regression comparison",
+      "optional source-set version for provenance"
     ],
-    "forbidden_on_main": [
-      "client or site-specific URL inventories",
-      "GSC exports",
-      "Ahrefs exports",
-      "source-set snapshots",
-      "run-specific evidence"
-    ]
+    "forbidden_on_main": ["client/site-specific URL inventories","GSC exports","Ahrefs exports","source-set snapshots","run-specific evidence"]
   },
   "usage_assertions": [
-    {"tool": "core-indexability", "path": ".github/workflows/seo-audit.yml", "contains": "seo_basic_check.py"},
-    {"tool": "siteone", "path": ".github/workflows/seo-audit.yml", "contains": "siteone-crawler"},
-    {"tool": "siteone-browser", "path": ".github/workflows/seo-audit.yml", "contains": "--browser"},
-    {"tool": "bounded-url-list", "path": ".github/workflows/seo-audit.yml", "contains": "runtime-urls.txt"},
-    {"tool": "technical-evidence", "path": ".github/workflows/seo-audit.yml", "contains": "technical_evidence.py"},
-    {"tool": "lighthouse-ci", "path": ".github/workflows/seo-audit.yml", "contains": "lighthouse_summary.py"},
-    {"tool": "nu-html-checker", "path": ".github/workflows/seo-audit.yml", "contains": "VNU_ASSET_ID"},
-    {"tool": "evidence-manifest", "path": ".github/workflows/seo-audit.yml", "contains": "build_evidence_manifest.py"},
-    {"tool": "page-expectations", "path": "scripts/verify_page_expectations.py", "contains": "def load_pages"}
+    {"tool":"safe-http","path":"scripts/safe_http.py","contains":"_PinnedHTTPSConnection"},
+    {"tool":"core-indexability","path":".github/workflows/seo-audit.yml","contains":"Core SEO and indexability observation"},
+    {"tool":"siteone-resolve","path":".github/workflows/seo-audit.yml","contains":"siteone_resolve.py"},
+    {"tool":"siteone","path":".github/workflows/seo-audit.yml","contains":"SiteOne HTTP crawl with explicit scope"},
+    {"tool":"siteone-browser","path":".github/workflows/seo-audit.yml","contains":"SiteOne rendered browser crawl"},
+    {"tool":"bounded-url-list","path":".github/workflows/seo-audit.yml","contains":"--single-page"},
+    {"tool":"sitewide-discovery","path":".github/workflows/seo-audit.yml","contains":"siteone_scope.py \"${args[@]}\""},
+    {"tool":"technical-evidence","path":".github/workflows/seo-audit.yml","contains":"technical_evidence.py"},
+    {"tool":"regression-baseline","path":".github/workflows/seo-audit.yml","contains":"--before-graph"},
+    {"tool":"lighthouse-ci","path":".github/workflows/seo-audit.yml","contains":"Lighthouse CI collection on trusted target"},
+    {"tool":"safe-html-snapshot","path":".github/workflows/seo-audit.yml","contains":"fetch_html_snapshot.py"},
+    {"tool":"nu-html-checker","path":".github/workflows/seo-audit.yml","contains":"reports/target-snapshot.html"},
+    {"tool":"evidence-manifest","path":".github/workflows/seo-audit.yml","contains":"build_evidence_manifest.py"},
+    {"tool":"page-expectations","path":"scripts/verify_page_expectations.py","contains":"fetch_text("}
   ],
   "boundaries": [
     "GSC remains authoritative for owned Google Search performance and Google's observed index status.",
     "Ahrefs remains authoritative only for its own market, keyword, backlink and competitive datasets.",
-    "This repository owns reproducible technical observations, normalized technical evidence and regression comparison only.",
-    "Rendered browser evidence and HTTP-response evidence must retain separate observation-layer labels.",
+    "This repository owns reproducible technical observations, scope metadata, normalized technical evidence and regression comparison only.",
+    "Repository-owned HTTP follows validated public-IP pinning on every redirect hop.",
+    "Third-party crawler/browser fetches run only for explicitly trusted targets; SiteOne top-document hosts receive explicit --resolve mappings.",
+    "Nu validates a local safe snapshot and never receives the user target URL as a network input.",
+    "Bounded and sitewide scopes are separate contracts and must never be silently conflated.",
+    "Rendered browser evidence and HTTP-response evidence retain separate observation-layer labels.",
+    "A sitewide completeness claim is invalid when the crawl cap is reached or crawl-scope.json says scope_complete=false.",
+    "A regression claim requires a compatible successful prior run plus manifest-bound SHA-256 verification of baseline findings and graph artifacts.",
+    "New warning/error relationship issues are regressions; new informational relationship observations are not automatically regressions.",
     "External URL selection does not import external source semantics into repository output.",
     "Tool findings are diagnostics; SEO owns interpretation and prioritization.",
-    "The evidence manifest records provenance and artifacts; it does not replace Project SEO source truth.",
-    "Client, target and run-specific truth belongs in runtime input or artifacts, not permanently on main.",
-    "Post-publication checks require non-empty typed expectations and preserve URL resource identity."
+    "Client, target and run-specific truth belongs in runtime input or artifacts, not permanently on main."
   ]
 }

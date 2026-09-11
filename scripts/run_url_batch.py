@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
-"""Run the repository's stable HTTP technical check over a bounded public URL list."""
+"""Run the stable HTTP technical check over a bounded public URL list."""
 from __future__ import annotations
 
 import argparse
 import json
 from pathlib import Path
 
-from seo_basic_check import run
-from validate_target import validate_target
+try:
+    from .seo_basic_check import run
+    from .validate_target import validate_target
+except ImportError:
+    from seo_basic_check import run
+    from validate_target import validate_target
 
 
 def load_urls(path: str, max_urls: int) -> list[str]:
@@ -35,9 +39,11 @@ def main() -> int:
     if not 1 <= args.max_urls <= 5000:
         raise ValueError("max_urls must be between 1 and 5000")
     urls = load_urls(args.url_list, args.max_urls)
-    records = [run(url) for url in urls]
-    payload = {"schema_version": "1.0", "url_count": len(urls), "records": records}
-    out = Path(args.output); out.parent.mkdir(parents=True, exist_ok=True)
+    origin_cache: dict = {}
+    records = [run(url, origin_cache=origin_cache) for url in urls]
+    payload = {"schema_version": "1.1", "url_count": len(urls), "origin_count": len(origin_cache), "records": records}
+    out = Path(args.output)
+    out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     print(out)
     return 0

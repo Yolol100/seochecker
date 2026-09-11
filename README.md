@@ -1,103 +1,72 @@
 # SEO Checker — Technical SEO Evidence
 
-SEO Checker turns one public website URL into a repeatable technical SEO evidence package.
+SEO Checker turns public website targets into repeatable technical SEO evidence. Project SEO owns strategy and interpretation; this repository owns controlled technical observation, scope metadata and regression evidence. Ahrefs and GSC remain separate evidence sources.
 
-**Built by:** [Andrew Baeten](https://github.com/Yolol100) · [Portfolio](https://andrewbaeten.nl)
+## Evidence chain
 
-## Eén taak
+`Ahrefs/GSC/SEO-selected scope -> SEO Checker -> normalized findings/relations -> fix -> compatible baseline comparison -> evidence manifest`
 
-`publieke URL -> technische live-checks -> crawl/lab/HTML evidence -> artifact`
+The default branch never stores client truth, GSC/Ahrefs exports, target inventories or run evidence.
 
-De repository bepaalt geen SEO-strategie en bevat geen klantwaarheid. Project SEO in Google Drive bepaalt beleid en interpretatie; deze repo levert alleen gecontroleerde technische evidence.
+## Two safety levels
 
-## Workflow
+**Safe bounded core** works on a maximum of 500 explicit public URLs. Repository-owned HTTP follows every redirect through `scripts/safe_http.py`: all DNS answers must be globally routable and each TCP connection is pinned to a validated IP while Host/SNI keeps the original hostname.
 
-Gebruik **Actions -> SEO Audit -> Run workflow** en geef een publieke HTTPS-URL op.
+**Trusted advanced audit** is enabled only with `trusted_render_target=true`. It may add SiteOne, SiteOne browser rendering and Lighthouse. SiteOne receives explicit `--resolve` mappings for requested hosts. Browser subresources are still an external runtime boundary, so browser/crawler evidence is never enabled for an untrusted arbitrary target.
 
-De audit voert uit:
+## Crawl scopes
 
-- HTTP/final URL en indexability-checks;
-- meta robots, `X-Robots-Tag`, canonical, sitemap en basismetadata;
-- JSON-LD-syntax en gevonden types;
-- SiteOne crawl;
-- Lighthouse CI labmeting;
-- lokale Nu HTML-validatie;
-- `reports/evidence-manifest.json` met provenance en artifactinventaris.
+`bounded` is the default. It verifies exactly the supplied runtime URL set. SiteOne, when enabled for a trusted target, uses `--url-list` plus `--single-page` and cannot silently expand the page scope.
 
-Belangrijkste output:
+`sitewide` requires a trusted target. SiteOne discovers pages with an explicit `sitewide_max_urls` cap. Plain and rendered discoveries are unioned before the detailed HTTP parser runs. Error-status pages remain in the effective set. A site-wide completeness claim is valid only when `reports/crawl-scope.json` says `scope_complete: true`.
 
-- `reports/evidence-manifest.json`
+## Rendered DOM
+
+Set `render_js=true` only when JavaScript can change SEO-relevant output. `reports/rendered-technical-findings.json` is a separate `rendered_dom` layer. Missing requested rendered URLs fail closed. SiteOne JSON does not reliably expose every rendered head relation; decision-critical non-exported signals still require dedicated browser/DOM evidence.
+
+## Regression comparison
+
+A later run can set `baseline_run_id=<earlier successful SEO Audit run>`. The workflow verifies repository, workflow, target, runtime scope, baseline run ID/status/commit and SHA-256 hashes for `technical-findings.json` and `technical-graph.json`. Only then is `reports/regression-diff.json` generated. URL regressions and new warning/error relationship issues can fail the run; informational graph observations do not automatically count as regressions.
+
+## Sitemap and markup safety
+
+Sitemap fetches use the pinned HTTP layer, compressed/raw and decompressed byte limits, URL/sitemap count caps, and reject DTD/ENTITY declarations. Sitemap extraction problems are evidence about the target; they do not masquerade as checker execution failures.
+
+Nu HTML Checker never fetches the target directly. `scripts/fetch_html_snapshot.py` first creates a safely fetched local HTML snapshot; Nu validates that local file.
+
+## Main artifacts
+
+Read `reports/evidence-manifest.json` first. Relevant layers include:
+
 - `reports/basic-seo.json`
-- `reports/siteone.json`
-- `reports/siteone.html`
+- `reports/crawl-scope.json`
+- `reports/technical-findings.json`
+- `reports/technical-graph.json`
+- `reports/rendered-technical-findings.json`
+- `reports/sitemap-extraction.json`
 - `reports/lighthouse-summary.json`
+- `reports/target-snapshot.json`
 - `reports/w3c-nu.json`
-- `.lighthouseci/` alleen wanneer ruwe diagnose nodig is
+- `reports/baseline-validation.json`
+- `reports/regression-diff.json`
 
-Lees na iedere run eerst `reports/evidence-manifest.json`.
+## Evidence boundaries
 
-## Post-publication check
+GSC is the owned Google Search/index evidence source. Ahrefs owns its market, keyword, backlink and competitive data. SEO Checker owns reproducible technical observations. The SEO Skill and Project SEO sources own interpretation, prioritization and acceptance requirements.
 
-`scripts/verify_page_expectations.py` vergelijkt de live HTTP-response/HTML met expliciete runtime-verwachtingen. Het script controleert geen JavaScript-browser-DOM.
+A green audit does not prove ranking, traffic, conversions or future indexation. Lighthouse is lab data, not CrUX field data.
 
-Ondersteunde verwachtingen zijn `status`, `indexable`, `title_contains`, `meta_contains`, `h1_contains`, `canonical_equals`, `final_url_equals` en `required_internal_links`.
+## Post-publication expectations
 
-Voorbeeld:
+`scripts/verify_page_expectations.py` checks non-empty typed runtime expectations using the same pinned safe HTTP layer. URL equality preserves scheme, host including `www`, non-default port, exact path and query. Keep target-specific expectation files off `main`.
 
-```json
-{
-  "url": "https://example.nl/dienst/",
-  "expected": {
-    "status": 200,
-    "indexable": true,
-    "title_contains": "Dienst",
-    "canonical_equals": "/dienst/",
-    "required_internal_links": ["/contact/"]
-  }
-}
-```
-
-```bash
-python3 scripts/verify_page_expectations.py expectations.json --report reports/page-expectations.json
-```
-
-Commit geen klant-/URL-specifieke expectationbestanden op `main`. Een geslaagde check bewijst alleen de expliciet gecontroleerde live HTTP/HTML-eigenschappen, niet ranking, verkeer, conversies of JavaScript-gerenderde toestand.
-
-## Wat bewust niet in deze repo zit
-
-- GSC-data of GSC OAuth;
-- Ahrefs-data of API-keys;
-- keyword-, backlink- of AI-zichtbaarheidsstrategie;
-- content-/media-/schema-beleid dat al in Project SEO staat;
-- ranking-, traffic-, lead- of omzetclaims.
-
-GSC, Ahrefs, analytics en andere databronnen worden buiten deze repo gebruikt en alleen gecombineerd wanneer hun evidenceklasse de SEO-beslissing echt verandert.
-
-## Bewijsgrenzen
-
-- Toolmeldingen zijn diagnostics, geen Google-oordeel.
-- Lighthouse is labdata en vervangt geen fielddata/CrUX.
-- Een technische audit bewijst geen indexatie, ranking, verkeer of conversie.
-- `toolkit-contract.json` is het enige repositorycontract.
-- Klant-/run-specifieke waarheid hoort in runtime-input of artifacts, niet permanent op `main`.
-
-## Veiligheid
-
-Private, loopback en link-local targets worden geweigerd. Commit geen credentials, tokens, klantdata of exports.
-
-## Ontwikkeltest
+## Tests
 
 ```bash
 python3 -m unittest discover -s tests -v
 python3 -m py_compile scripts/*.py tests/*.py
 ```
 
-## Over de ontwikkelaar
+## License
 
-Andrew Baeten is Senior WordPress Developer & Web Designer met 10+ jaar ervaring, 90+ WordPress-projecten en beheer van 120+ websites en webshops.
-
-## Licentie
-
-Deze repository bevat momenteel geen open-sourcelicentie. Hergebruik of distributie vereist expliciete toestemming van de rechthebbende.
-
-URL equality in post-publication checks preserves scheme, hostname (including www), non-default port, exact path and query. Only default ports, host case, empty root paths and fragments normalize. Empty pages or empty/unknown expectations are invalid input, never a successful check.
+This repository currently has no open-source license. Reuse or distribution requires explicit permission from the rights holder.

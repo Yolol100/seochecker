@@ -1,78 +1,114 @@
 #!/usr/bin/env python3
-"""Extract page URLs from discovered XML sitemaps with strict public-target and size bounds."""
+"""Extract page URLs from XML sitemaps with strict public-target and resource bounds."""
 from __future__ import annotations
 
 import argparse
 import gzip
+import io
 import json
+import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from urllib.request import HTTPRedirectHandler, Request, build_opener
+from urllib.request import HTTPRedirectHandler
 
-from validate_target import validate_target
+try:
+    from .safe_http import fetch_bytes as safe_fetch_bytes
+    from .validate_target import validate_target
+except ImportError:
+    try:
+        from scripts.safe_http import fetch_bytes as safe_fetch_bytes
+        from scripts.validate_target import validate_target
+    except ImportError:
+        from safe_http import fetch_bytes as safe_fetch_bytes
+        from validate_target import validate_target
 
-USER_AGENT = "WebactueelSEOChecker/1.3 (+https://github.com/Yolol100/seochecker)"
+USER_AGENT = "WebactueelSEOChecker/1.6 (+https://github.com/Yolol100/seochecker)"
+_XML_DANGEROUS = re.compile(br"<!\s*(?:DOCTYPE|ENTITY)\b", re.I)
 
 
 class PublicOnlyRedirectHandler(HTTPRedirectHandler):
+    """Compatibility helper; safe_http performs the actual pinned redirect handling."""
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         validate_target(newurl)
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
-_OPENER = build_opener(PublicOnlyRedirectHandler())
+def _bounded_gzip_decompress(data: bytes, max_decompressed_bytes: int) -> bytes:
+    with gzip.GzipFile(fileobj=io.BytesIO(data), mode="rb") as gz:
+        out = gz.read(max_decompressed_bytes + 1)
+    if len(out) > max_decompressed_bytes:
+        raise ValueError(f"decompressed sitemap exceeds max_decompressed_bytes={max_decompressed_bytes}")
+    return out
 
 
-def fetch_bytes(url: str, max_bytes: int) -> bytes:
+def fetch_sitemap_bytes(url: str, max_bytes: int, max_decompressed_bytes: int) -> bytes:
     validate_target(url)
-    req = Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/xml,text/xml,*/*;q=0.5"})
-    with _OPENER.open(req, timeout=20) as resp:
-        validate_target(resp.geturl())
-        data = resp.read(max_bytes + 1)
-        if len(data) > max_bytes:
-            raise ValueError(f"sitemap exceeds max_bytes={max_bytes}: {url}")
-        if url.lower().endswith(".gz") or "gzip" in (resp.headers.get("Content-Type", "").lower()):
-            data = gzip.decompress(data)
-        return data
+    response = safe_fetch_bytes(
+        url,
+        timeout=20,
+        max_bytes=max_bytes,
+        headers={"User-Agent": USER_AGENT, "Accept": "application/xml,text/xml,*/*;q=0.5"},
+    )
+    data = bytes(response.body)
+    content_type = response.headers.get("Content-Type", "").lower()
+    content_encoding = response.headers.get("Content-Encoding", "").lower()
+    if response.url.lower().endswith(".gz") or "gzip" in content_type or "gzip" in content_encoding:
+        data = _bounded_gzip_decompress(data, max_decompressed_bytes)
+    elif len(data) > max_decompressed_bytes:
+        raise ValueError(f"sitemap exceeds max_decompressed_bytes={max_decompressed_bytes}")
+    return data
 
 
-def parse_locs(data: bytes) -> tuple[str, list[str]]:
+def parse_locs(data: bytes, max_locs: int = 100_000) -> tuple[str, list[str]]:
+    if _XML_DANGEROUS.search(data):
+        raise ValueError("DTD/ENTITY declarations are not allowed in sitemap XML")
+    if max_locs < 1:
+        raise ValueError("max_locs must be positive")
     root = ET.fromstring(data)
     kind = root.tag.rsplit("}", 1)[-1].lower()
-    locs = []
+    if kind not in {"urlset", "sitemapindex"}:
+        raise ValueError(f"unsupported sitemap root element: {kind}")
+    locs: list[str] = []
     for elem in root.iter():
         if elem.tag.rsplit("}", 1)[-1].lower() == "loc" and elem.text and elem.text.strip():
             locs.append(elem.text.strip())
+            if len(locs) > max_locs:
+                raise ValueError(f"sitemap contains more than max_locs={max_locs} <loc> entries")
     return kind, locs
 
 
 def sitemap_seeds(payload: dict) -> list[str]:
-    out = []
+    out: list[str] = []
     for record in payload.get("records", []):
         if not isinstance(record, dict):
             continue
         for url in record.get("sitemap_candidates", []) or []:
-            if isinstance(url, str) and url.strip() and url not in out:
+            if isinstance(url, str) and url.strip() and url.strip() not in out:
                 out.append(url.strip())
     return out
 
 
-def collect(seeds: list[str], max_sitemaps: int, max_urls: int, max_bytes: int) -> tuple[list[str], list[dict]]:
-    queue = list(seeds)
-    seen_maps = set()
-    urls = []
-    errors = []
+def collect(seeds: list[str], max_sitemaps: int, max_urls: int, max_bytes: int, max_decompressed_bytes: int) -> tuple[list[str], list[dict], bool]:
+    queue = list(dict.fromkeys(seeds))
+    seen_maps: set[str] = set()
+    urls: list[str] = []
+    errors: list[dict] = []
+    truncated = False
     while queue and len(seen_maps) < max_sitemaps and len(urls) < max_urls:
         sm = queue.pop(0)
         if sm in seen_maps:
             continue
         seen_maps.add(sm)
         try:
-            kind, locs = parse_locs(fetch_bytes(sm, max_bytes))
+            data = fetch_sitemap_bytes(sm, max_bytes, max_decompressed_bytes)
+            kind, locs = parse_locs(data, max(max_urls, max_sitemaps) + 1)
             if kind == "sitemapindex":
                 for loc in locs:
                     validate_target(loc)
-                    if loc not in seen_maps and loc not in queue and len(seen_maps) + len(queue) < max_sitemaps:
+                    if loc not in seen_maps and loc not in queue:
+                        if len(seen_maps) + len(queue) >= max_sitemaps:
+                            truncated = True
+                            break
                         queue.append(loc)
             else:
                 for loc in locs:
@@ -80,10 +116,13 @@ def collect(seeds: list[str], max_sitemaps: int, max_urls: int, max_bytes: int) 
                     if loc not in urls:
                         urls.append(loc)
                     if len(urls) >= max_urls:
+                        truncated = True
                         break
         except Exception as exc:
             errors.append({"sitemap": sm, "error": str(exc)})
-    return urls, errors
+    if queue:
+        truncated = True
+    return urls, errors, truncated
 
 
 def main() -> int:
@@ -92,23 +131,37 @@ def main() -> int:
     ap.add_argument("--output", required=True, help="plain text URL list")
     ap.add_argument("--report", required=True, help="JSON extraction report")
     ap.add_argument("--max-sitemaps", type=int, default=100)
-    ap.add_argument("--max-urls", type=int, default=10000)
-    ap.add_argument("--max-bytes", type=int, default=20_000_000)
+    ap.add_argument("--max-urls", type=int, default=10_000)
+    ap.add_argument("--max-bytes", type=int, default=20_000_000, help="max compressed/raw response bytes")
+    ap.add_argument("--max-decompressed-bytes", type=int, default=50_000_000)
     args = ap.parse_args()
+    if not 1 <= args.max_sitemaps <= 1000:
+        raise ValueError("max-sitemaps must be between 1 and 1000")
+    if not 1 <= args.max_urls <= 100_000:
+        raise ValueError("max-urls must be between 1 and 100000")
+    if not 1 <= args.max_bytes <= 100_000_000 or not 1 <= args.max_decompressed_bytes <= 200_000_000:
+        raise ValueError("sitemap byte limits outside supported safety bounds")
     payload = json.loads(Path(args.input).read_text(encoding="utf-8"))
     seeds = sitemap_seeds(payload)
-    urls, errors = collect(seeds, args.max_sitemaps, args.max_urls, args.max_bytes)
+    urls, errors, truncated = collect(seeds, args.max_sitemaps, args.max_urls, args.max_bytes, args.max_decompressed_bytes)
     Path(args.output).write_text("".join(f"{u}\n" for u in urls), encoding="utf-8")
     report = {
-        "schema_version": "1.0",
+        "schema_version": "1.2",
         "seed_count": len(seeds),
         "url_count": len(urls),
         "errors": errors,
-        "truncated": len(urls) >= args.max_urls,
+        "truncated": truncated,
+        "complete": bool(seeds) and not errors and not truncated,
+        "limits": {
+            "max_sitemaps": args.max_sitemaps,
+            "max_urls": args.max_urls,
+            "max_response_bytes": args.max_bytes,
+            "max_decompressed_bytes": args.max_decompressed_bytes,
+        },
     }
     Path(args.report).write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     print(args.report)
-    return 0 if seeds else 2
+    return 0
 
 
 if __name__ == "__main__":
