@@ -6,7 +6,7 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from seo_basic_check import _parse_robots, analyze_html, fetch, robots_crawlability
+from seo_basic_check import _parse_robots, analyze_html, fetch, robots_crawlability, robots_fetch_interpretation
 
 
 class AnalyzeHtmlTests(unittest.TestCase):
@@ -109,6 +109,25 @@ class RobotsCrawlabilityTests(unittest.TestCase):
     def test_empty_disallow_means_allow_all(self):
         policy = _parse_robots("User-agent: *\nDisallow:\n")
         self.assertTrue(robots_crawlability(policy, "https://example.com/anything")["allowed"])
+
+    def test_google_treats_4xx_except_429_as_no_restrictions(self):
+        for status in (400, 401, 403, 404, 410, 451):
+            with self.subTest(status=status):
+                result = robots_fetch_interpretation(status)
+                self.assertEqual(result["state"], "no_valid_robots_file")
+                self.assertTrue(result["default_allowed"])
+
+    def test_google_treats_429_and_5xx_as_temporarily_unavailable(self):
+        for status in (429, 500, 503, None):
+            with self.subTest(status=status):
+                result = robots_fetch_interpretation(status)
+                self.assertEqual(result["state"], "temporarily_unavailable")
+                self.assertIsNone(result["default_allowed"])
+
+    def test_all_2xx_are_processed_as_rules(self):
+        for status in (200, 204, 206):
+            with self.subTest(status=status):
+                self.assertEqual(robots_fetch_interpretation(status)["state"], "rules_available")
 
 
 class PublicTargetSafetyTests(unittest.TestCase):

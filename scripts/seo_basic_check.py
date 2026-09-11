@@ -17,7 +17,7 @@ except ImportError:
     from safe_http import fetch_text
     from validate_target import validate_target
 
-USER_AGENT = "WebactueelSEOChecker/1.7 (+https://github.com/Yolol100/seochecker)"
+USER_AGENT = "WebactueelSEOChecker/1.8 (+https://github.com/Yolol100/seochecker)"
 ROBOTS_MAX_RULES = 10000
 
 
@@ -198,7 +198,7 @@ def robots_crawlability(policy: dict, url: str, user_agent: str = "googlebot") -
         path_query += "?" + parsed.query
     matches = [r for r in rules if _robots_pattern_match(str(r.get("pattern") or ""), path_query)]
     if not matches:
-        return {"user_agent": ua, "allowed": True, "matched_rule": None, "selected_group_count": len(selected)}
+        return {"user_agent": ua, "allowed": True, "matched_rule": None, "selected_group_count": len(selected), "interpretation": "rules_evaluated"}
     matches.sort(key=lambda r: (_robots_specificity(str(r.get("pattern") or "")), r.get("directive") == "allow"), reverse=True)
     winner = matches[0]
     return {
@@ -206,7 +206,26 @@ def robots_crawlability(policy: dict, url: str, user_agent: str = "googlebot") -
         "allowed": winner.get("directive") == "allow",
         "matched_rule": {"directive": winner.get("directive"), "pattern": winner.get("pattern")},
         "selected_group_count": len(selected),
+        "interpretation": "rules_evaluated",
     }
+
+
+def robots_fetch_interpretation(status) -> dict:
+    try:
+        code = int(status) if status is not None else None
+    except (TypeError, ValueError):
+        code = None
+    if code is not None and 200 <= code < 300:
+        return {"state": "rules_available", "default_allowed": None, "reason": "robots_http_2xx"}
+    if code is not None and 400 <= code < 500 and code != 429:
+        return {"state": "no_valid_robots_file", "default_allowed": True, "reason": "robots_http_4xx_except_429"}
+    if code == 429:
+        return {"state": "temporarily_unavailable", "default_allowed": None, "reason": "robots_http_429"}
+    if code is not None and 500 <= code < 600:
+        return {"state": "temporarily_unavailable", "default_allowed": None, "reason": "robots_http_5xx"}
+    if code is None:
+        return {"state": "temporarily_unavailable", "default_allowed": None, "reason": "robots_network_or_fetch_error"}
+    return {"state": "unknown", "default_allowed": None, "reason": f"robots_http_{code}"}
 
 
 def analyze_html(html, base_url):
@@ -270,15 +289,16 @@ def _origin_evidence(final_url: str, origin_cache: dict | None = None):
     origin = key
     robots_url = urljoin(origin + "/", "robots.txt")
     robots = probe(robots_url); robots_body = robots.pop("body", "")
+    robots_fetch = robots_fetch_interpretation(robots.get("status"))
     robots_policy = {"groups": [], "rule_count": 0}
     robots_parse_error = None
-    if robots.get("status") == 200:
+    if robots_fetch["state"] == "rules_available":
         try:
             robots_policy = _parse_robots(robots_body)
         except ValueError as exc:
             robots_parse_error = str(exc)
     sitemap_urls = []
-    if robots.get("status") == 200:
+    if robots_fetch["state"] == "rules_available":
         for line in robots_body.splitlines():
             clean = line.split("#", 1)[0].strip()
             if clean.lower().startswith("sitemap:"):
@@ -290,6 +310,7 @@ def _origin_evidence(final_url: str, origin_cache: dict | None = None):
         sitemap = probe(candidate); sitemap.pop("body", None); sitemap_probes.append(sitemap)
     result = {
         "robots_txt": robots,
+        "robots_fetch_interpretation": robots_fetch,
         "robots_policy": robots_policy,
         "robots_parse_error": robots_parse_error,
         "sitemap_candidates": sitemap_urls,
@@ -314,15 +335,19 @@ def run(url, origin_cache: dict | None = None):
     origin_evidence = _origin_evidence(final_url, origin_cache)
     result.update(origin_evidence)
     result["crawlability_blockers"] = []
+    robots_fetch = origin_evidence.get("robots_fetch_interpretation") or {}
     if origin_evidence.get("robots_parse_error"):
         result.setdefault("warnings", []).append("robots.txt kon niet betrouwbaar worden geparseerd")
-        result["robots_googlebot"] = {"user_agent": "googlebot", "allowed": None, "matched_rule": None, "selected_group_count": 0}
-    elif origin_evidence.get("robots_txt", {}).get("status") == 200:
+        result["robots_googlebot"] = {"user_agent": "googlebot", "allowed": None, "matched_rule": None, "selected_group_count": 0, "interpretation": "parse_error"}
+    elif robots_fetch.get("state") == "rules_available":
         result["robots_googlebot"] = robots_crawlability(origin_evidence.get("robots_policy") or {}, final_url)
         if result["robots_googlebot"]["allowed"] is False:
             result["crawlability_blockers"].append("robots.txt blokkeert Googlebot voor de uiteindelijke URL")
+    elif robots_fetch.get("default_allowed") is True:
+        result["robots_googlebot"] = {"user_agent": "googlebot", "allowed": True, "matched_rule": None, "selected_group_count": 0, "interpretation": robots_fetch.get("reason")}
     else:
-        result["robots_googlebot"] = {"user_agent": "googlebot", "allowed": None, "matched_rule": None, "selected_group_count": 0}
+        result["robots_googlebot"] = {"user_agent": "googlebot", "allowed": None, "matched_rule": None, "selected_group_count": 0, "interpretation": robots_fetch.get("reason") or "unknown"}
+        result.setdefault("warnings", []).append("robots.txt crawlability is tijdelijk of niet eenduidig vast te stellen uit de huidige fetch")
     return result
 
 
