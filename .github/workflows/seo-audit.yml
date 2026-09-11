@@ -168,22 +168,21 @@ jobs:
           SITEONE_BIN="$(find tools/siteone -type f -name siteone-crawler -perm -111 | head -n 1)"
           test -n "$SITEONE_BIN"
           echo "SITEONE_BIN=$SITEONE_BIN" >> "$GITHUB_ENV"
-      - name: Build pinned SiteOne DNS mappings
+      - name: Validate SiteOne trusted target DNS
         id: siteone_resolve
         if: env.TRUSTED_RENDER_TARGET == 'true' && steps.install_siteone.outcome == 'success'
-        run: python3 scripts/siteone_resolve.py --url-list reports/runtime-urls.txt --output reports/siteone-resolve-args.txt
+        run: python3 scripts/siteone_resolve.py --url-list reports/runtime-urls.txt --output reports/siteone-network-preflight.json
       - name: SiteOne HTTP crawl with explicit scope
         id: siteone
         if: env.TRUSTED_RENDER_TARGET == 'true' && steps.siteone_resolve.outcome == 'success'
         continue-on-error: true
         shell: bash
         run: |
-          mapfile -t RESOLVE_ARGS < reports/siteone-resolve-args.txt
           if [ "$CRAWL_SCOPE" = "bounded" ]; then
-            "$SITEONE_BIN" "${RESOLVE_ARGS[@]}" --url-list=reports/runtime-urls.txt --single-page --disable-all-assets --max-visited-urls=500 --max-queue-length=1000 --max-reqs-per-sec=5 --output-html-report=reports/siteone.html --output-json-file=reports/siteone.json --output-text-file=reports/siteone.txt
+            "$SITEONE_BIN" --url-list=reports/runtime-urls.txt --single-page --disable-all-assets --max-visited-urls=500 --max-queue-length=1000 --max-reqs-per-sec=5 --output-html-report=reports/siteone.html --output-json-file=reports/siteone.json --output-text-file=reports/siteone.txt
           else
             queue_limit=$(( SITEWIDE_MAX_URLS * 2 )); [ "$queue_limit" -lt 1000 ] && queue_limit=1000; [ "$queue_limit" -gt 10000 ] && queue_limit=10000
-            "$SITEONE_BIN" "${RESOLVE_ARGS[@]}" --url="$TARGET_URL" --disable-all-assets --max-visited-urls="$SITEWIDE_MAX_URLS" --max-queue-length="$queue_limit" --max-reqs-per-sec=5 --output-html-report=reports/siteone.html --output-json-file=reports/siteone.json --output-text-file=reports/siteone.txt
+            "$SITEONE_BIN" --url="$TARGET_URL" --disable-all-assets --max-visited-urls="$SITEWIDE_MAX_URLS" --max-queue-length="$queue_limit" --max-reqs-per-sec=5 --output-html-report=reports/siteone.html --output-json-file=reports/siteone.json --output-text-file=reports/siteone.txt
           fi
       - name: SiteOne rendered browser crawl
         id: siteone_rendered
@@ -191,13 +190,12 @@ jobs:
         continue-on-error: true
         shell: bash
         run: |
-          mapfile -t RESOLVE_ARGS < reports/siteone-resolve-args.txt
           EXTRA="Title(500>),Description(1000>),H1=xpath://h1/text()(500>),Canonical=xpath://link[@rel='canonical']/@href(2048>),Robots=xpath://meta[@name='robots']/@content(500>)"
           if [ "$CRAWL_SCOPE" = "bounded" ]; then
-            "$SITEONE_BIN" "${RESOLVE_ARGS[@]}" --url-list=reports/runtime-urls.txt --single-page --browser --disable-images --disable-fonts --disable-files --max-visited-urls=500 --max-queue-length=1000 --max-reqs-per-sec=3 --extra-columns="$EXTRA" --output-html-report=reports/siteone-rendered.html --output-json-file=reports/siteone-rendered.json --output-text-file=reports/siteone-rendered.txt
+            "$SITEONE_BIN" --url-list=reports/runtime-urls.txt --single-page --browser --disable-images --disable-fonts --disable-files --max-visited-urls=500 --max-queue-length=1000 --max-reqs-per-sec=3 --extra-columns="$EXTRA" --output-html-report=reports/siteone-rendered.html --output-json-file=reports/siteone-rendered.json --output-text-file=reports/siteone-rendered.txt
           else
             queue_limit=$(( SITEWIDE_MAX_URLS * 2 )); [ "$queue_limit" -lt 1000 ] && queue_limit=1000; [ "$queue_limit" -gt 10000 ] && queue_limit=10000
-            "$SITEONE_BIN" "${RESOLVE_ARGS[@]}" --url="$TARGET_URL" --browser --disable-images --disable-fonts --disable-files --max-visited-urls="$SITEWIDE_MAX_URLS" --max-queue-length="$queue_limit" --max-reqs-per-sec=3 --extra-columns="$EXTRA" --output-html-report=reports/siteone-rendered.html --output-json-file=reports/siteone-rendered.json --output-text-file=reports/siteone-rendered.txt
+            "$SITEONE_BIN" --url="$TARGET_URL" --browser --disable-images --disable-fonts --disable-files --max-visited-urls="$SITEWIDE_MAX_URLS" --max-queue-length="$queue_limit" --max-reqs-per-sec=3 --extra-columns="$EXTRA" --output-html-report=reports/siteone-rendered.html --output-json-file=reports/siteone-rendered.json --output-text-file=reports/siteone-rendered.txt
           fi
       - name: Resolve effective crawl scope
         id: scope
@@ -324,7 +322,7 @@ jobs:
         id: evidence_manifest
         if: always()
         run: |
-          python3 scripts/build_evidence_manifest.py --workflow "SEO Audit" --target-url "$TARGET_URL" --request-id "$REQUEST_ID" --source-set-version "$SOURCE_SET_VERSION" --crawl-scope "$CRAWL_SCOPE" --runtime-url-list reports/runtime-urls.txt --sitewide-max-urls "$SITEWIDE_MAX_URLS" --baseline-run-id "$BASELINE_RUN_ID" --scope-report reports/crawl-scope.json --artifact runtime-urls=reports/runtime-urls.txt --artifact effective-urls=reports/effective-urls.txt --artifact crawl-scope=reports/crawl-scope.json --artifact basic=reports/basic-seo.json --artifact url-batch=reports/url-batch.json --artifact technical-findings=reports/technical-findings.json --artifact technical-graph=reports/technical-graph.json --artifact sitemap-extraction=reports/sitemap-extraction.json --artifact sitemap-urls=reports/sitemap-urls.txt --artifact siteone-resolve-args=reports/siteone-resolve-args.txt --artifact siteone-json=reports/siteone.json --artifact siteone-html=reports/siteone.html --artifact siteone-rendered-json=reports/siteone-rendered.json --artifact siteone-rendered-html=reports/siteone-rendered.html --artifact rendered-technical-findings=reports/rendered-technical-findings.json --artifact baseline-validation=reports/baseline-validation.json --artifact regression-diff=reports/regression-diff.json --artifact lighthouse-summary=reports/lighthouse-summary.json --artifact lighthouse-raw=.lighthouseci --artifact target-snapshot=reports/target-snapshot.html --artifact target-snapshot-metadata=reports/target-snapshot.json --artifact vnu-tool-metadata=reports/vnu-tool-metadata.json --artifact w3c-nu=reports/w3c-nu.json --output reports/evidence-manifest.json
+          python3 scripts/build_evidence_manifest.py --workflow "SEO Audit" --target-url "$TARGET_URL" --request-id "$REQUEST_ID" --source-set-version "$SOURCE_SET_VERSION" --crawl-scope "$CRAWL_SCOPE" --runtime-url-list reports/runtime-urls.txt --sitewide-max-urls "$SITEWIDE_MAX_URLS" --baseline-run-id "$BASELINE_RUN_ID" --scope-report reports/crawl-scope.json --artifact runtime-urls=reports/runtime-urls.txt --artifact effective-urls=reports/effective-urls.txt --artifact crawl-scope=reports/crawl-scope.json --artifact basic=reports/basic-seo.json --artifact url-batch=reports/url-batch.json --artifact technical-findings=reports/technical-findings.json --artifact technical-graph=reports/technical-graph.json --artifact sitemap-extraction=reports/sitemap-extraction.json --artifact sitemap-urls=reports/sitemap-urls.txt --artifact siteone-network-preflight=reports/siteone-network-preflight.json --artifact siteone-json=reports/siteone.json --artifact siteone-html=reports/siteone.html --artifact siteone-rendered-json=reports/siteone-rendered.json --artifact siteone-rendered-html=reports/siteone-rendered.html --artifact rendered-technical-findings=reports/rendered-technical-findings.json --artifact baseline-validation=reports/baseline-validation.json --artifact regression-diff=reports/regression-diff.json --artifact lighthouse-summary=reports/lighthouse-summary.json --artifact lighthouse-raw=.lighthouseci --artifact target-snapshot=reports/target-snapshot.html --artifact target-snapshot-metadata=reports/target-snapshot.json --artifact vnu-tool-metadata=reports/vnu-tool-metadata.json --artifact w3c-nu=reports/w3c-nu.json --output reports/evidence-manifest.json
       - name: Write audit summary
         if: always()
         run: |
@@ -339,7 +337,7 @@ jobs:
             echo "Baseline run: ${BASELINE_RUN_ID:-none}"
             echo ""; echo "| Controle | Status |"; echo "|---|---|"
             echo "| Core safe HTTP | ${{ steps.basic.outcome }} |"
-            echo "| SiteOne DNS map | ${{ steps.siteone_resolve.outcome }} |"
+            echo "| SiteOne DNS preflight | ${{ steps.siteone_resolve.outcome }} |"
             echo "| SiteOne HTTP crawl | ${{ steps.siteone.outcome }} |"
             echo "| SiteOne rendered crawl | ${{ steps.siteone_rendered.outcome }} |"
             echo "| Scope resolution | ${{ steps.scope.outcome }} |"
