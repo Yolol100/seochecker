@@ -9,7 +9,6 @@ import sys
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
-from urllib.request import HTTPRedirectHandler
 
 try:
     from .safe_http import fetch_text
@@ -18,14 +17,8 @@ except ImportError:
     from safe_http import fetch_text
     from validate_target import validate_target
 
-USER_AGENT = "WebactueelSEOChecker/1.4 (+https://github.com/Yolol100/seochecker)"
-
-
-class PublicOnlyRedirectHandler(HTTPRedirectHandler):
-    """Compatibility helper used by tests/callers; safe_http performs actual requests."""
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        validate_target(newurl)
-        return super().redirect_request(req, fp, code, msg, headers, newurl)
+USER_AGENT = "WebactueelSEOChecker/1.7 (+https://github.com/Yolol100/seochecker)"
+ROBOTS_MAX_RULES = 10000
 
 
 class PageParser(HTMLParser):
@@ -137,6 +130,85 @@ def _rel_urls(parser, base_url, rel_name):
     return values
 
 
+def _parse_robots(body: str) -> dict:
+    groups = []
+    agents = []
+    rules = []
+    seen_rule = False
+    rule_count = 0
+
+    def flush():
+        nonlocal agents, rules, seen_rule
+        if agents:
+            groups.append({"agents": list(dict.fromkeys(agents)), "rules": list(rules)})
+        agents = []
+        rules = []
+        seen_rule = False
+
+    for original in str(body or "").splitlines():
+        line = original.split("#", 1)[0].strip()
+        if not line or ":" not in line:
+            continue
+        field, value = line.split(":", 1)
+        field = field.strip().lower()
+        value = value.strip()
+        if field == "user-agent":
+            if seen_rule:
+                flush()
+            if value:
+                agents.append(value.lower())
+        elif field in {"allow", "disallow"} and agents:
+            seen_rule = True
+            if field == "disallow" and value == "":
+                continue
+            rule_count += 1
+            if rule_count > ROBOTS_MAX_RULES:
+                raise ValueError(f"robots.txt exceeds max rules={ROBOTS_MAX_RULES}")
+            rules.append({"directive": field, "pattern": value})
+        elif field == "sitemap":
+            continue
+    flush()
+    return {"groups": groups, "rule_count": rule_count}
+
+
+def _robots_pattern_match(pattern: str, path_query: str) -> bool:
+    if pattern == "":
+        return False
+    anchored = pattern.endswith("$")
+    core = pattern[:-1] if anchored else pattern
+    regex = "^" + re.escape(core).replace(r"\*", ".*")
+    if anchored:
+        regex += "$"
+    return re.search(regex, path_query) is not None
+
+
+def _robots_specificity(pattern: str) -> int:
+    return len(pattern.replace("*", "").replace("$", ""))
+
+
+def robots_crawlability(policy: dict, url: str, user_agent: str = "googlebot") -> dict:
+    ua = user_agent.lower()
+    groups = policy.get("groups", []) if isinstance(policy, dict) else []
+    exact = [g for g in groups if ua in (g.get("agents") or [])]
+    selected = exact or [g for g in groups if "*" in (g.get("agents") or [])]
+    rules = [r for g in selected for r in (g.get("rules") or []) if isinstance(r, dict)]
+    parsed = urlparse(url)
+    path_query = parsed.path or "/"
+    if parsed.query:
+        path_query += "?" + parsed.query
+    matches = [r for r in rules if _robots_pattern_match(str(r.get("pattern") or ""), path_query)]
+    if not matches:
+        return {"user_agent": ua, "allowed": True, "matched_rule": None, "selected_group_count": len(selected)}
+    matches.sort(key=lambda r: (_robots_specificity(str(r.get("pattern") or "")), r.get("directive") == "allow"), reverse=True)
+    winner = matches[0]
+    return {
+        "user_agent": ua,
+        "allowed": winner.get("directive") == "allow",
+        "matched_rule": {"directive": winner.get("directive"), "pattern": winner.get("pattern")},
+        "selected_group_count": len(selected),
+    }
+
+
 def analyze_html(html, base_url):
     parser = PageParser(); parser.feed(html)
     title = " ".join("".join(parser.title_parts).split())
@@ -198,17 +270,33 @@ def _origin_evidence(final_url: str, origin_cache: dict | None = None):
     origin = key
     robots_url = urljoin(origin + "/", "robots.txt")
     robots = probe(robots_url); robots_body = robots.pop("body", "")
+    robots_policy = {"groups": [], "rule_count": 0}
+    robots_parse_error = None
+    if robots.get("status") == 200:
+        try:
+            robots_policy = _parse_robots(robots_body)
+        except ValueError as exc:
+            robots_parse_error = str(exc)
     sitemap_urls = []
     if robots.get("status") == 200:
         for line in robots_body.splitlines():
-            if line.lower().startswith("sitemap:"):
-                value = line.split(":", 1)[1].strip()
+            clean = line.split("#", 1)[0].strip()
+            if clean.lower().startswith("sitemap:"):
+                value = clean.split(":", 1)[1].strip()
                 if value: sitemap_urls.append(value)
     if not sitemap_urls: sitemap_urls = [urljoin(origin + "/", "sitemap.xml")]
     sitemap_urls = list(dict.fromkeys(sitemap_urls)); sitemap_probes = []
     for candidate in sitemap_urls[:10]:
         sitemap = probe(candidate); sitemap.pop("body", None); sitemap_probes.append(sitemap)
-    result = {"robots_txt": robots, "sitemap_candidates": sitemap_urls, "sitemap_probes": sitemap_probes, "sitemap_probe": sitemap_probes[0] if sitemap_probes else None, "sitemap_probe_truncated": len(sitemap_urls) > len(sitemap_probes)}
+    result = {
+        "robots_txt": robots,
+        "robots_policy": robots_policy,
+        "robots_parse_error": robots_parse_error,
+        "sitemap_candidates": sitemap_urls,
+        "sitemap_probes": sitemap_probes,
+        "sitemap_probe": sitemap_probes[0] if sitemap_probes else None,
+        "sitemap_probe_truncated": len(sitemap_urls) > len(sitemap_probes),
+    }
     cache[key] = copy.deepcopy(result)
     return result
 
@@ -223,7 +311,19 @@ def run(url, origin_cache: dict | None = None):
     if is_html: result.update(analyze_html(page.get("body", ""), final_url))
     else: result.update({"indexability_blockers": [], "warnings": ["response is geen HTML; HTML-specifieke checks zijn overgeslagen"]})
     if _x_robots_has_noindex(page.get("x_robots_tag")): result.setdefault("indexability_blockers", []).append("X-Robots-Tag bevat noindex voor Googlebot")
-    result.update(_origin_evidence(final_url, origin_cache)); return result
+    origin_evidence = _origin_evidence(final_url, origin_cache)
+    result.update(origin_evidence)
+    result["crawlability_blockers"] = []
+    if origin_evidence.get("robots_parse_error"):
+        result.setdefault("warnings", []).append("robots.txt kon niet betrouwbaar worden geparseerd")
+        result["robots_googlebot"] = {"user_agent": "googlebot", "allowed": None, "matched_rule": None, "selected_group_count": 0}
+    elif origin_evidence.get("robots_txt", {}).get("status") == 200:
+        result["robots_googlebot"] = robots_crawlability(origin_evidence.get("robots_policy") or {}, final_url)
+        if result["robots_googlebot"]["allowed"] is False:
+            result["crawlability_blockers"].append("robots.txt blokkeert Googlebot voor de uiteindelijke URL")
+    else:
+        result["robots_googlebot"] = {"user_agent": "googlebot", "allowed": None, "matched_rule": None, "selected_group_count": 0}
+    return result
 
 
 def main():
