@@ -1,9 +1,6 @@
 import unittest
-from unittest.mock import patch
 
-from urllib.request import Request
-
-from scripts.extract_sitemap_urls import PublicOnlyRedirectHandler, parse_locs, sitemap_seeds
+from scripts.extract_sitemap_urls import build_report, parse_locs, sitemap_seeds
 
 
 class SitemapExtractionTests(unittest.TestCase):
@@ -22,13 +19,36 @@ class SitemapExtractionTests(unittest.TestCase):
         ]}
         self.assertEqual(sitemap_seeds(payload), ["https://example.com/sitemap.xml", "https://example.com/news.xml"])
 
-    def test_redirect_target_is_validated_before_following(self):
-        handler = PublicOnlyRedirectHandler()
-        req = Request("https://example.com/sitemap.xml")
-        with patch("scripts.extract_sitemap_urls.validate_target", side_effect=ValueError("private target")) as validate:
-            with self.assertRaisesRegex(ValueError, "private target"):
-                handler.redirect_request(req, None, 302, "Found", {}, "http://127.0.0.1/private.xml")
-            validate.assert_called_once_with("http://127.0.0.1/private.xml")
+    def test_no_candidates_are_explicitly_not_applicable_but_complete(self):
+        report = build_report(
+            [],
+            [],
+            [],
+            False,
+            max_sitemaps=100,
+            max_urls=10_000,
+            max_bytes=20_000_000,
+            max_decompressed_bytes=50_000_000,
+        )
+        self.assertEqual(report["schema_version"], "1.3")
+        self.assertEqual(report["status"], "not_applicable")
+        self.assertFalse(report["applicable"])
+        self.assertTrue(report["complete"])
+
+    def test_errors_make_applicable_extraction_partial(self):
+        report = build_report(
+            ["https://example.com/sitemap.xml"],
+            [],
+            [{"sitemap": "https://example.com/sitemap.xml", "error": "bad xml"}],
+            False,
+            max_sitemaps=100,
+            max_urls=10_000,
+            max_bytes=20_000_000,
+            max_decompressed_bytes=50_000_000,
+        )
+        self.assertEqual(report["status"], "partial")
+        self.assertTrue(report["applicable"])
+        self.assertFalse(report["complete"])
 
 
 if __name__ == "__main__":

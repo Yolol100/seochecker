@@ -68,6 +68,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.14.7'
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -101,6 +105,10 @@ jobs:
     steps:
       - name: Checkout request
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.14.7'
       - name: Resolve source-bound request
         id: resolve
         shell: bash
@@ -138,6 +146,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.14.7'
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -179,10 +191,10 @@ jobs:
         shell: bash
         run: |
           if [ "$CRAWL_SCOPE" = "bounded" ]; then
-            "$SITEONE_BIN" --url-list=reports/runtime-urls.txt --single-page --disable-all-assets --max-visited-urls=500 --max-queue-length=1000 --max-reqs-per-sec=5 --output-html-report=reports/siteone.html --output-json-file=reports/siteone.json --output-text-file=reports/siteone.txt
+            "$SITEONE_BIN" --url-list=reports/runtime-urls.txt --single-page --disable-all-assets --max-visited-urls=500 --max-queue-length=1000 --max-reqs-per-sec=5 --output-html-report=reports/siteone.html --output-json-file=reports/siteone.json
           else
             queue_limit=$(( SITEWIDE_MAX_URLS * 2 )); [ "$queue_limit" -lt 1000 ] && queue_limit=1000; [ "$queue_limit" -gt 10000 ] && queue_limit=10000
-            "$SITEONE_BIN" --url="$TARGET_URL" --disable-all-assets --max-visited-urls="$SITEWIDE_MAX_URLS" --max-queue-length="$queue_limit" --max-reqs-per-sec=5 --output-html-report=reports/siteone.html --output-json-file=reports/siteone.json --output-text-file=reports/siteone.txt
+            "$SITEONE_BIN" --url="$TARGET_URL" --disable-all-assets --max-visited-urls="$SITEWIDE_MAX_URLS" --max-queue-length="$queue_limit" --max-reqs-per-sec=5 --output-html-report=reports/siteone.html --output-json-file=reports/siteone.json
           fi
       - name: SiteOne rendered browser crawl
         id: siteone_rendered
@@ -192,10 +204,10 @@ jobs:
         run: |
           EXTRA="Title(500>),Description(1000>),H1=xpath://h1/text()(500>),Canonical=xpath://link[@rel='canonical']/@href(2048>),Robots=xpath://meta[@name='robots']/@content(500>)"
           if [ "$CRAWL_SCOPE" = "bounded" ]; then
-            "$SITEONE_BIN" --url-list=reports/runtime-urls.txt --single-page --browser --disable-images --disable-fonts --disable-files --max-visited-urls=500 --max-queue-length=1000 --max-reqs-per-sec=3 --extra-columns="$EXTRA" --output-html-report=reports/siteone-rendered.html --output-json-file=reports/siteone-rendered.json --output-text-file=reports/siteone-rendered.txt
+            "$SITEONE_BIN" --url-list=reports/runtime-urls.txt --single-page --browser --disable-images --disable-fonts --disable-files --max-visited-urls=500 --max-queue-length=1000 --max-reqs-per-sec=3 --extra-columns="$EXTRA" --output-html-report=reports/siteone-rendered.html --output-json-file=reports/siteone-rendered.json
           else
             queue_limit=$(( SITEWIDE_MAX_URLS * 2 )); [ "$queue_limit" -lt 1000 ] && queue_limit=1000; [ "$queue_limit" -gt 10000 ] && queue_limit=10000
-            "$SITEONE_BIN" --url="$TARGET_URL" --browser --disable-images --disable-fonts --disable-files --max-visited-urls="$SITEWIDE_MAX_URLS" --max-queue-length="$queue_limit" --max-reqs-per-sec=3 --extra-columns="$EXTRA" --output-html-report=reports/siteone-rendered.html --output-json-file=reports/siteone-rendered.json --output-text-file=reports/siteone-rendered.txt
+            "$SITEONE_BIN" --url="$TARGET_URL" --browser --disable-images --disable-fonts --disable-files --max-visited-urls="$SITEWIDE_MAX_URLS" --max-queue-length="$queue_limit" --max-reqs-per-sec=3 --extra-columns="$EXTRA" --output-html-report=reports/siteone-rendered.html --output-json-file=reports/siteone-rendered.json
           fi
       - name: Resolve effective crawl scope
         id: scope
@@ -278,7 +290,7 @@ jobs:
         run: python3 scripts/fetch_html_snapshot.py "$TARGET_URL" --output reports/target-snapshot.html --metadata reports/target-snapshot.json
       - name: Set up Java 17 for local Nu Checker
         if: steps.snapshot.outcome == 'success'
-        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: temurin
           java-version: '17'

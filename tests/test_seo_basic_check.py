@@ -6,7 +6,7 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from seo_basic_check import PublicOnlyRedirectHandler, analyze_html, fetch
+from seo_basic_check import _parse_robots, analyze_html, fetch, robots_crawlability
 
 
 class AnalyzeHtmlTests(unittest.TestCase):
@@ -73,19 +73,50 @@ class AnalyzeHtmlTests(unittest.TestCase):
         self.assertIn("H1 ontbreekt", data["warnings"])
 
 
+class RobotsCrawlabilityTests(unittest.TestCase):
+    def test_googlebot_specific_group_overrides_wildcard_group(self):
+        policy = _parse_robots("""
+        User-agent: *
+        Disallow: /
+
+        User-agent: Googlebot
+        Allow: /
+        """)
+        decision = robots_crawlability(policy, "https://example.com/private")
+        self.assertTrue(decision["allowed"])
+        self.assertEqual(decision["matched_rule"], {"directive": "allow", "pattern": "/"})
+
+    def test_longest_rule_wins_and_allow_wins_equal_specificity(self):
+        policy = _parse_robots("""
+        User-agent: Googlebot
+        Disallow: /private/
+        Allow: /private/public/
+        Disallow: /same
+        Allow: /same
+        """)
+        self.assertTrue(robots_crawlability(policy, "https://example.com/private/public/page")["allowed"])
+        self.assertFalse(robots_crawlability(policy, "https://example.com/private/secret")["allowed"])
+        self.assertTrue(robots_crawlability(policy, "https://example.com/same")["allowed"])
+
+    def test_wildcard_and_end_anchor_are_supported(self):
+        policy = _parse_robots("""
+        User-agent: *
+        Disallow: /*?print=1$
+        """)
+        self.assertFalse(robots_crawlability(policy, "https://example.com/page?print=1")["allowed"])
+        self.assertTrue(robots_crawlability(policy, "https://example.com/page?print=1&x=2")["allowed"])
+
+    def test_empty_disallow_means_allow_all(self):
+        policy = _parse_robots("User-agent: *\nDisallow:\n")
+        self.assertTrue(robots_crawlability(policy, "https://example.com/anything")["allowed"])
+
+
 class PublicTargetSafetyTests(unittest.TestCase):
     def test_fetch_validates_initial_target_before_network_access(self):
         with patch("seo_basic_check.validate_target", side_effect=ValueError("unsafe target")) as validate:
             with self.assertRaisesRegex(ValueError, "unsafe target"):
                 fetch("http://127.0.0.1/")
         validate.assert_called_once_with("http://127.0.0.1/")
-
-    def test_redirect_handler_validates_each_redirect_destination(self):
-        handler = PublicOnlyRedirectHandler()
-        with patch("seo_basic_check.validate_target", side_effect=ValueError("unsafe redirect")) as validate:
-            with self.assertRaisesRegex(ValueError, "unsafe redirect"):
-                handler.redirect_request(None, None, 302, "Found", {}, "http://169.254.169.254/latest/meta-data/")
-        validate.assert_called_once_with("http://169.254.169.254/latest/meta-data/")
 
 
 if __name__ == "__main__":

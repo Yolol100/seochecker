@@ -9,7 +9,6 @@ import json
 import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from urllib.request import HTTPRedirectHandler
 
 try:
     from .safe_http import fetch_bytes as safe_fetch_bytes
@@ -24,13 +23,6 @@ except ImportError:
 
 USER_AGENT = "WebactueelSEOChecker/1.6 (+https://github.com/Yolol100/seochecker)"
 _XML_DANGEROUS = re.compile(br"<!\s*(?:DOCTYPE|ENTITY)\b", re.I)
-
-
-class PublicOnlyRedirectHandler(HTTPRedirectHandler):
-    """Compatibility helper; safe_http performs the actual pinned redirect handling."""
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        validate_target(newurl)
-        return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
 def _bounded_gzip_decompress(data: bytes, max_decompressed_bytes: int) -> bytes:
@@ -125,6 +117,38 @@ def collect(seeds: list[str], max_sitemaps: int, max_urls: int, max_bytes: int, 
     return urls, errors, truncated
 
 
+def build_report(
+    seeds: list[str],
+    urls: list[str],
+    errors: list[dict],
+    truncated: bool,
+    *,
+    max_sitemaps: int,
+    max_urls: int,
+    max_bytes: int,
+    max_decompressed_bytes: int,
+) -> dict:
+    applicable = bool(seeds)
+    complete = not errors and not truncated
+    status = "not_applicable" if not applicable else ("complete" if complete else "partial")
+    return {
+        "schema_version": "1.3",
+        "status": status,
+        "applicable": applicable,
+        "seed_count": len(seeds),
+        "url_count": len(urls),
+        "errors": errors,
+        "truncated": truncated,
+        "complete": complete,
+        "limits": {
+            "max_sitemaps": max_sitemaps,
+            "max_urls": max_urls,
+            "max_response_bytes": max_bytes,
+            "max_decompressed_bytes": max_decompressed_bytes,
+        },
+    }
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--input", required=True, help="batch JSON containing sitemap_candidates")
@@ -145,20 +169,16 @@ def main() -> int:
     seeds = sitemap_seeds(payload)
     urls, errors, truncated = collect(seeds, args.max_sitemaps, args.max_urls, args.max_bytes, args.max_decompressed_bytes)
     Path(args.output).write_text("".join(f"{u}\n" for u in urls), encoding="utf-8")
-    report = {
-        "schema_version": "1.2",
-        "seed_count": len(seeds),
-        "url_count": len(urls),
-        "errors": errors,
-        "truncated": truncated,
-        "complete": bool(seeds) and not errors and not truncated,
-        "limits": {
-            "max_sitemaps": args.max_sitemaps,
-            "max_urls": args.max_urls,
-            "max_response_bytes": args.max_bytes,
-            "max_decompressed_bytes": args.max_decompressed_bytes,
-        },
-    }
+    report = build_report(
+        seeds,
+        urls,
+        errors,
+        truncated,
+        max_sitemaps=args.max_sitemaps,
+        max_urls=args.max_urls,
+        max_bytes=args.max_bytes,
+        max_decompressed_bytes=args.max_decompressed_bytes,
+    )
     Path(args.report).write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     print(args.report)
     return 0

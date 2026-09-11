@@ -44,6 +44,36 @@ class TechnicalEvidenceTests(unittest.TestCase):
         self.assertIn("indexable_observed_url_missing_from_sitemap", kinds)
         self.assertEqual(graph["sitemap_url_count"], 2)
 
+    def test_crawlability_stays_separate_from_indexability(self):
+        normalized = normalize_payload({"records": [{
+            "requested_url": "https://example.com/private",
+            "http": {"status": 200, "final_url": "https://example.com/private"},
+            "canonical": ["https://example.com/private"],
+            "robots_googlebot": {"user_agent": "googlebot", "allowed": False, "matched_rule": {"directive": "disallow", "pattern": "/private"}},
+            "crawlability_blockers": ["robots.txt blokkeert Googlebot voor de uiteindelijke URL"],
+        }]})
+        record = normalized["records"][0]
+        self.assertTrue(record["indexable"])
+        self.assertFalse(record["crawlable_googlebot"])
+        graph = validate_graph(normalized)
+        self.assertIn("url_blocked_by_robots_googlebot", {x["type"] for x in graph["issues"]})
+
+    def test_diff_classifies_crawlability_regression(self):
+        before = normalize_payload({"records": [{
+            "requested_url": "https://example.com/a",
+            "http": {"status": 200, "final_url": "https://example.com/a"},
+            "robots_googlebot": {"user_agent": "googlebot", "allowed": True, "matched_rule": None},
+        }]})
+        after = normalize_payload({"records": [{
+            "requested_url": "https://example.com/a",
+            "http": {"status": 200, "final_url": "https://example.com/a"},
+            "robots_googlebot": {"user_agent": "googlebot", "allowed": False, "matched_rule": {"directive": "disallow", "pattern": "/"}},
+            "crawlability_blockers": ["robots.txt blokkeert Googlebot voor de uiteindelijke URL"],
+        }]})
+        diff = diff_runs(before, after)
+        self.assertEqual(diff["counts"]["regressed"], 1)
+        self.assertTrue(diff["has_regressions"])
+
     def test_diff_classifies_regression_and_improvement(self):
         before = normalize_payload({"records": [
             {"requested_url": "https://example.com/a", "http": {"status": 500, "final_url": "https://example.com/a"}, "indexability_blockers": ["bad"]},
