@@ -15,6 +15,10 @@ except ImportError:
     except ImportError:
         from technical_evidence import url_key
 
+SUPPORTED_MANIFEST_SCHEMAS = {"1.2"}
+SUPPORTED_FINDINGS_SCHEMAS = {"1.3"}
+SUPPORTED_GRAPH_SCHEMAS = {"1.3"}
+
 
 def sha256_file(path: str) -> str:
     digest = hashlib.sha256()
@@ -48,6 +52,18 @@ def _check_artifact_hash(errors: list[str], manifest: dict, artifact_id: str, pa
         errors.append(f"baseline artifact hash mismatch: {artifact_id}")
 
 
+def _check_json_schema(errors: list[str], label: str, path: str, supported: set[str]) -> str | None:
+    try:
+        payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        errors.append(f"baseline {label} is not valid JSON: {exc}")
+        return None
+    schema = str(payload.get("schema_version") or "") if isinstance(payload, dict) else ""
+    if schema not in supported:
+        errors.append(f"baseline {label} schema unsupported: {schema or 'missing'}")
+    return schema or None
+
+
 def validate(
     manifest: dict,
     target_url: str,
@@ -61,6 +77,9 @@ def validate(
     graph_path: str = "",
 ):
     errors: list[str] = []
+    manifest_schema = str(manifest.get("schema_version") or "")
+    if manifest_schema not in SUPPORTED_MANIFEST_SCHEMAS:
+        errors.append(f"baseline manifest schema unsupported: {manifest_schema or 'missing'}")
     if manifest.get("repository") != "Yolol100/seochecker":
         errors.append("baseline repository mismatch")
     if manifest.get("workflow") != "SEO Audit":
@@ -93,12 +112,18 @@ def validate(
             errors.append("baseline GitHub run not successful")
         if github.get("sha") and str(run_metadata.get("headSha") or run_metadata.get("head_sha") or "") != str(github.get("sha")):
             errors.append("baseline run commit sha mismatch")
+    findings_schema = None
+    graph_schema = None
     if findings_path:
         _check_artifact_hash(errors, manifest, "technical-findings", findings_path)
+        if Path(findings_path).is_file():
+            findings_schema = _check_json_schema(errors, "technical-findings", findings_path, SUPPORTED_FINDINGS_SCHEMAS)
     if graph_path:
         _check_artifact_hash(errors, manifest, "technical-graph", graph_path)
+        if Path(graph_path).is_file():
+            graph_schema = _check_json_schema(errors, "technical-graph", graph_path, SUPPORTED_GRAPH_SCHEMAS)
     return {
-        "schema_version": "1.1",
+        "schema_version": "1.2",
         "compatible": not errors,
         "errors": errors,
         "current": {
@@ -106,10 +131,16 @@ def validate(
             "crawl_scope": crawl_scope,
             "runtime_url_fingerprint_sha256": current_fp,
             "sitewide_max_urls": sitewide_max_urls if crawl_scope == "sitewide" else None,
+            "supported_manifest_schemas": sorted(SUPPORTED_MANIFEST_SCHEMAS),
+            "supported_findings_schemas": sorted(SUPPORTED_FINDINGS_SCHEMAS),
+            "supported_graph_schemas": sorted(SUPPORTED_GRAPH_SCHEMAS),
         },
         "baseline": {
             "run_id": github.get("run_id"),
             "sha": github.get("sha"),
+            "manifest_schema": manifest_schema or None,
+            "findings_schema": findings_schema,
+            "graph_schema": graph_schema,
             "scope": scope,
         },
     }
