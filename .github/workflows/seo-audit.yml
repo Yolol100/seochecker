@@ -179,10 +179,10 @@ jobs:
         shell: bash
         run: |
           if [ "$CRAWL_SCOPE" = "bounded" ]; then
-            "$SITEONE_BIN" --url-list=reports/runtime-urls.txt --single-page --disable-all-assets --max-visited-urls=500 --max-queue-length=1000 --max-reqs-per-sec=5 --output-html-report=reports/siteone.html --output-json-file=reports/siteone.json --output-text-file=reports/siteone.txt
+            "$SITEONE_BIN" --url-list=reports/runtime-urls.txt --single-page --disable-all-assets --max-visited-urls=500 --max-queue-length=1000 --max-reqs-per-sec=5 --output-html-report=reports/siteone.html --output-json-file=reports/siteone.json
           else
             queue_limit=$(( SITEWIDE_MAX_URLS * 2 )); [ "$queue_limit" -lt 1000 ] && queue_limit=1000; [ "$queue_limit" -gt 10000 ] && queue_limit=10000
-            "$SITEONE_BIN" --url="$TARGET_URL" --disable-all-assets --max-visited-urls="$SITEWIDE_MAX_URLS" --max-queue-length="$queue_limit" --max-reqs-per-sec=5 --output-html-report=reports/siteone.html --output-json-file=reports/siteone.json --output-text-file=reports/siteone.txt
+            "$SITEONE_BIN" --url="$TARGET_URL" --disable-all-assets --max-visited-urls="$SITEWIDE_MAX_URLS" --max-queue-length="$queue_limit" --max-reqs-per-sec=5 --output-html-report=reports/siteone.html --output-json-file=reports/siteone.json
           fi
       - name: SiteOne rendered browser crawl
         id: siteone_rendered
@@ -192,10 +192,10 @@ jobs:
         run: |
           EXTRA="Title(500>),Description(1000>),H1=xpath://h1/text()(500>),Canonical=xpath://link[@rel='canonical']/@href(2048>),Robots=xpath://meta[@name='robots']/@content(500>)"
           if [ "$CRAWL_SCOPE" = "bounded" ]; then
-            "$SITEONE_BIN" --url-list=reports/runtime-urls.txt --single-page --browser --disable-images --disable-fonts --disable-files --max-visited-urls=500 --max-queue-length=1000 --max-reqs-per-sec=3 --extra-columns="$EXTRA" --output-html-report=reports/siteone-rendered.html --output-json-file=reports/siteone-rendered.json --output-text-file=reports/siteone-rendered.txt
+            "$SITEONE_BIN" --url-list=reports/runtime-urls.txt --single-page --browser --disable-images --disable-fonts --disable-files --max-visited-urls=500 --max-queue-length=1000 --max-reqs-per-sec=3 --extra-columns="$EXTRA" --output-html-report=reports/siteone-rendered.html --output-json-file=reports/siteone-rendered.json
           else
             queue_limit=$(( SITEWIDE_MAX_URLS * 2 )); [ "$queue_limit" -lt 1000 ] && queue_limit=1000; [ "$queue_limit" -gt 10000 ] && queue_limit=10000
-            "$SITEONE_BIN" --url="$TARGET_URL" --browser --disable-images --disable-fonts --disable-files --max-visited-urls="$SITEWIDE_MAX_URLS" --max-queue-length="$queue_limit" --max-reqs-per-sec=3 --extra-columns="$EXTRA" --output-html-report=reports/siteone-rendered.html --output-json-file=reports/siteone-rendered.json --output-text-file=reports/siteone-rendered.txt
+            "$SITEONE_BIN" --url="$TARGET_URL" --browser --disable-images --disable-fonts --disable-files --max-visited-urls="$SITEWIDE_MAX_URLS" --max-queue-length="$queue_limit" --max-reqs-per-sec=3 --extra-columns="$EXTRA" --output-html-report=reports/siteone-rendered.html --output-json-file=reports/siteone-rendered.json
           fi
       - name: Resolve effective crawl scope
         id: scope
