@@ -76,7 +76,7 @@ def main() -> int:
         "schema_version": "1.0",
         "validated_origin_count": len(records),
         "origins": records,
-        "forced_ip_arguments_emitted": false,
+        "forced_ip_arguments_emitted": False,
         "network_mode": "siteone_native_dns_tls",
         "reason": "SiteOne 2.5.1 forced-IP resolution changes HTTPS TLS/SNI semantics; advanced crawling is restricted to explicitly trusted targets.",
     }
