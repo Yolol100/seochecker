@@ -44,11 +44,32 @@ class ClosureHardeningTests(unittest.TestCase):
     def test_graph_regression(self):
         self.assertTrue(te.diff_graphs({'issues':[]},{'issues':[{'type':'x','url':'https://example.com/','severity':'warning'}]})['has_regressions'])
         self.assertFalse(te.diff_graphs({'issues':[]},{'issues':[{'type':'x','url':'https://example.com/','severity':'info'}]})['has_regressions'])
+    def _baseline_fixture(self, root, findings_schema='1.3', graph_schema='1.3', manifest_schema='1.2'):
+        u=root/'u'; f=root/'f'; g=root/'g'
+        u.write_text('https://example.com/\n')
+        f.write_text(json.dumps({'schema_version':findings_schema,'records':[]})+'\n')
+        g.write_text(json.dumps({'schema_version':graph_schema,'issues':[]})+'\n')
+        h=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()
+        m={'schema_version':manifest_schema,'repository':'Yolol100/seochecker','workflow':'SEO Audit','target_url':'https://example.com/','scope':{'crawl_scope':'bounded','runtime_url_fingerprint_sha256':vb.runtime_fingerprint(str(u))},'github':{'run_id':'1','sha':'abc'},'artifacts':[{'id':'technical-findings','type':'file','sha256':h(f)},{'id':'technical-graph','type':'file','sha256':h(g)}]}
+        meta={'databaseId':1,'name':'SEO Audit','status':'completed','conclusion':'success','headSha':'abc'}
+        return u,f,g,m,meta
     def test_baseline_hash_bound(self):
         with tempfile.TemporaryDirectory() as d:
-            d=Path(d); u=d/'u'; f=d/'f'; g=d/'g'; u.write_text('https://example.com/\n'); f.write_text('{}\n'); g.write_text('{}\n')
-            h=lambda p:hashlib.sha256(p.read_bytes()).hexdigest(); m={'repository':'Yolol100/seochecker','workflow':'SEO Audit','target_url':'https://example.com/','scope':{'crawl_scope':'bounded','runtime_url_fingerprint_sha256':vb.runtime_fingerprint(str(u))},'github':{'run_id':'1','sha':'abc'},'artifacts':[{'id':'technical-findings','type':'file','sha256':h(f)},{'id':'technical-graph','type':'file','sha256':h(g)}]}; meta={'databaseId':1,'name':'SEO Audit','status':'completed','conclusion':'success','headSha':'abc'}
-            self.assertTrue(vb.validate(m,'https://example.com/','bounded',str(u),500,baseline_run_id='1',run_metadata=meta,findings_path=str(f),graph_path=str(g))['compatible']); g.write_text('x'); self.assertFalse(vb.validate(m,'https://example.com/','bounded',str(u),500,baseline_run_id='1',run_metadata=meta,findings_path=str(f),graph_path=str(g))['compatible'])
+            u,f,g,m,meta=self._baseline_fixture(Path(d))
+            self.assertTrue(vb.validate(m,'https://example.com/','bounded',str(u),500,baseline_run_id='1',run_metadata=meta,findings_path=str(f),graph_path=str(g))['compatible'])
+            g.write_text('x')
+            self.assertFalse(vb.validate(m,'https://example.com/','bounded',str(u),500,baseline_run_id='1',run_metadata=meta,findings_path=str(f),graph_path=str(g))['compatible'])
+    def test_baseline_schema_must_be_supported(self):
+        with tempfile.TemporaryDirectory() as d:
+            u,f,g,m,meta=self._baseline_fixture(Path(d),findings_schema='1.2')
+            result=vb.validate(m,'https://example.com/','bounded',str(u),500,baseline_run_id='1',run_metadata=meta,findings_path=str(f),graph_path=str(g))
+            self.assertFalse(result['compatible'])
+            self.assertIn('baseline technical-findings schema unsupported: 1.2',result['errors'])
+        with tempfile.TemporaryDirectory() as d:
+            u,f,g,m,meta=self._baseline_fixture(Path(d),manifest_schema='1.1')
+            result=vb.validate(m,'https://example.com/','bounded',str(u),500,baseline_run_id='1',run_metadata=meta,findings_path=str(f),graph_path=str(g))
+            self.assertFalse(result['compatible'])
+            self.assertIn('baseline manifest schema unsupported: 1.1',result['errors'])
     def test_workflow_and_contract(self):
         root=Path(__file__).resolve().parents[1]; w=(root/'.github/workflows/seo-audit.yml').read_text(); c=json.loads((root/'toolkit-contract.json').read_text());
         for x in ['resolve_audit_request.py','siteone_resolve.py','Validate SiteOne trusted target DNS','reports/siteone-network-preflight.json','--single-page','--before-graph','--run-metadata','fetch_html_snapshot.py','reports/target-snapshot.html','Lighthouse CI collection on trusted target','rendered_normalize.outcome','scope_complete','repos/validator/validator/releases/tags/latest','browser_download_url','vnu-tool-metadata.json','github_release_digest_matched']: self.assertIn(x,w)

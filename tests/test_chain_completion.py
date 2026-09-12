@@ -68,7 +68,7 @@ class BaselineAndContractTests(unittest.TestCase):
     def test_baseline_must_match_target_and_runtime_scope(self):
         with tempfile.TemporaryDirectory() as td:
             path=Path(td)/"urls.txt"; path.write_text("https://example.com/a\n",encoding="utf-8"); fp=runtime_fingerprint(str(path))
-            manifest={"repository":"Yolol100/seochecker","workflow":"SEO Audit","target_url":"https://example.com/a","scope":{"crawl_scope":"bounded","runtime_url_fingerprint_sha256":fp}}
+            manifest={"schema_version":"1.2","repository":"Yolol100/seochecker","workflow":"SEO Audit","target_url":"https://example.com/a","scope":{"crawl_scope":"bounded","runtime_url_fingerprint_sha256":fp}}
             self.assertTrue(validate_baseline(manifest,"https://example.com/a","bounded",str(path),500)["compatible"])
             self.assertFalse(validate_baseline(manifest,"https://example.org/a","bounded",str(path),500)["compatible"])
 
