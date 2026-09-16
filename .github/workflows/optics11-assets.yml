@@ -1,4 +1,4 @@
-name: Optics11 Case Visual Assets
+name: Optics11 All Pages Visual Assets
 
 on:
   push:
@@ -6,6 +6,7 @@ on:
       - runtime/optics11-life-20260916-2000
     paths:
       - '.github/workflows/optics11-assets.yml'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -13,64 +14,207 @@ permissions:
 jobs:
   capture:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 25
     steps:
-      - name: Download broad public assets referenced by current Optics11 pages
+      - name: Discover public pages and image assets
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p assets
-          pages=(
-            'https://www.optics11life.com/'
-            'https://www.optics11life.com/products/'
-            'https://www.optics11life.com/service-support/'
-            'https://www.optics11life.com/resources/'
-            'https://www.optics11life.com/contact/'
-            'https://www.optics11life.com/solutions/'
-            'https://www.optics11life.com/product/pavone/'
-            'https://www.optics11life.com/product/cuore/'
-            'https://www.optics11life.com/product/piuma/'
-            'https://www.optics11life.com/product/chiaro/'
-          )
-          : > assets/pages.txt
-          : > assets/all-pages.html
-          for page in "${pages[@]}"; do
-            echo "$page" >> assets/pages.txt
-            curl -fsSL --proto '=https' --tlsv1.2 "$page" >> assets/all-pages.html || true
-          done
+          mkdir -p assets/pages assets/images assets/screenshots
           python3 - <<'PY'
-          import re
-          from pathlib import Path
-          html = Path('assets/all-pages.html').read_text('utf-8', errors='ignore')
-          urls = sorted(set(re.findall(r'https://www\.optics11life\.com/wp-content/uploads/[^\"\'\s)<>]+', html)))
-          urls = [u.replace('&amp;', '&') for u in urls if re.search(r'\.(?:png|jpe?g|webp|svg)(?:\?.*)?$', u, re.I)]
-          Path('assets/image-urls.txt').write_text('\n'.join(urls) + ('\n' if urls else ''), encoding='utf-8')
-          focus = re.compile(r'(pavone|cuore|piuma|chiaro|optics11|service|training|support|hq|headquarters|20231018|mechanobiology|contractility|application|sample|lab|muscle|spheroid|organoid|newsletter|white|logo|nano|fiber|indent)', re.I)
-          selected = [u for u in urls if focus.search(u)] or urls
-          Path('assets/selected-image-urls.txt').write_text('\n'.join(selected[:80]) + ('\n' if selected else ''), encoding='utf-8')
-          print(f'found {len(urls)} images; selected {len(selected[:80])}')
+          import json, re, os, hashlib, html
+          from html.parser import HTMLParser
+          from urllib.request import Request, urlopen
+          from urllib.parse import urljoin, urlparse, urldefrag
+          import xml.etree.ElementTree as ET
+
+          BASE = 'https://www.optics11life.com/'
+          UA = 'Mozilla/5.0 (compatible; Webactueel case visual capture; +https://github.com/Yolol100/seochecker)'
+          MAX_PAGES = 120
+          MAX_IMAGES = 350
+
+          def fetch_text(url, timeout=25):
+              req = Request(url, headers={'User-Agent': UA, 'Accept': 'text/html,application/xhtml+xml,application/xml,text/xml,*/*;q=0.8'})
+              with urlopen(req, timeout=timeout) as r:
+                  data = r.read(12_000_000)
+                  ct = r.headers.get('content-type','')
+              enc = 'utf-8'
+              m = re.search(r'charset=([^;]+)', ct, re.I)
+              if m: enc = m.group(1).strip()
+              return data.decode(enc, 'replace'), ct
+
+          def fetch_bytes(url, timeout=25):
+              req = Request(url, headers={'User-Agent': UA, 'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8'})
+              with urlopen(req, timeout=timeout) as r:
+                  data = r.read(20_000_000)
+                  ct = r.headers.get('content-type','')
+              return data, ct
+
+          def same_site(url):
+              p = urlparse(url)
+              return p.scheme in ('http','https') and p.netloc == 'www.optics11life.com'
+
+          def clean_url(url):
+              url, _ = urldefrag(url.strip())
+              return url
+
+          def slug(url):
+              p = urlparse(url)
+              s = p.path.strip('/').replace('/', '__') or 'home'
+              s = re.sub(r'[^A-Za-z0-9._-]+','-',s)[:90]
+              return s or 'home'
+
+          def discover_sitemaps():
+              candidates = [urljoin(BASE,'sitemap_index.xml'), urljoin(BASE,'sitemap.xml')]
+              seen_sitemaps, page_urls = set(), []
+              queue = list(candidates)
+              while queue and len(seen_sitemaps) < 50:
+                  sm = queue.pop(0)
+                  if sm in seen_sitemaps: continue
+                  seen_sitemaps.add(sm)
+                  try:
+                      xml, _ = fetch_text(sm)
+                  except Exception:
+                      continue
+                  try:
+                      root = ET.fromstring(xml)
+                  except Exception:
+                      continue
+                  for loc in root.findall('.//{*}loc'):
+                      u = clean_url(loc.text or '')
+                      if not u: continue
+                      if u.endswith('.xml'):
+                          if same_site(u): queue.append(u)
+                      elif same_site(u):
+                          page_urls.append(u)
+              return list(dict.fromkeys(page_urls))
+
+          class ImgParser(HTMLParser):
+              def __init__(self, base):
+                  super().__init__(convert_charrefs=True)
+                  self.base = base
+                  self.images = []
+                  self.links = []
+              def add_img(self, value):
+                  if not value: return
+                  value = html.unescape(value).strip()
+                  for part in value.split(','):
+                      u = part.strip().split(' ')[0]
+                      if u and not u.startswith('data:'):
+                          self.images.append(clean_url(urljoin(self.base, u)))
+              def handle_starttag(self, tag, attrs):
+                  a = {k.lower(): v for k,v in attrs if k}
+                  if tag in ('img','source'):
+                      self.add_img(a.get('src'))
+                      self.add_img(a.get('srcset'))
+                      self.add_img(a.get('data-src'))
+                      self.add_img(a.get('data-srcset'))
+                  if tag == 'meta' and (a.get('property','').lower() in ('og:image','twitter:image') or a.get('name','').lower() == 'twitter:image'):
+                      self.add_img(a.get('content'))
+                  if tag == 'link' and a.get('rel') and 'image' in (a.get('as','') + ' ' + a.get('type','')).lower():
+                      self.add_img(a.get('href'))
+                  if tag == 'a':
+                      href = a.get('href')
+                      if href:
+                          u = clean_url(urljoin(self.base, href))
+                          if same_site(u): self.links.append(u)
+                  style = a.get('style') or ''
+                  for u in re.findall(r'url\(([^)]+)\)', style):
+                      self.add_img(u.strip('"\''))
+
+          pages = discover_sitemaps()
+          if not pages:
+              pages = [BASE, urljoin(BASE,'products/'), urljoin(BASE,'service-support/'), urljoin(BASE,'resources/'), urljoin(BASE,'contact/')]
+          filtered = []
+          for u in pages:
+              p = urlparse(u)
+              if not same_site(u): continue
+              if re.search(r'\.(jpg|jpeg|png|webp|svg|pdf|zip|xml)$', p.path, re.I): continue
+              filtered.append(u if u.endswith('/') else u + '/')
+          pages = list(dict.fromkeys(filtered))[:MAX_PAGES]
+
+          all_images = []
+          page_records = []
+          extra_links = []
+          for i,u in enumerate(pages,1):
+              try:
+                  text, ct = fetch_text(u)
+              except Exception as e:
+                  page_records.append({'index': i, 'url': u, 'slug': slug(u), 'fetch_error': str(e)})
+                  continue
+              fn = f"assets/pages/{i:03d}-{slug(u)}.html"
+              open(fn,'w',encoding='utf-8').write(text)
+              parser = ImgParser(u); parser.feed(text)
+              imgs = [x for x in parser.images if same_site(x) and '/wp-content/uploads/' in x]
+              all_images.extend(imgs)
+              extra_links.extend(parser.links)
+              title = re.search(r'<title[^>]*>(.*?)</title>', text, re.I|re.S)
+              page_records.append({'index': i, 'url': u, 'slug': slug(u), 'html_file': fn, 'title': re.sub(r'\s+',' ', title.group(1)).strip() if title else '', 'image_count': len(set(imgs))})
+
+          unique_images = list(dict.fromkeys(all_images))[:MAX_IMAGES]
+          image_records = []
+          for i,u in enumerate(unique_images,1):
+              try:
+                  data, ct = fetch_bytes(u)
+                  parsed = urlparse(u)
+                  ext = os.path.splitext(parsed.path)[1].lower().lstrip('.') or 'bin'
+                  if ext == 'jpeg': ext = 'jpg'
+                  if ext not in ('jpg','jpeg','png','webp','svg','gif','avif'): ext = 'bin'
+                  h = hashlib.sha256(data).hexdigest()[:12]
+                  fn = f"assets/images/{i:03d}-{h}.{ext}"
+                  open(fn,'wb').write(data)
+                  image_records.append({'index': i, 'url': u, 'file': fn, 'content_type': ct, 'bytes': len(data)})
+              except Exception as e:
+                  image_records.append({'index': i, 'url': u, 'error': str(e)})
+          summary = {'base': BASE, 'page_count': len(page_records), 'downloaded_image_count': len([x for x in image_records if 'file' in x]), 'max_pages': MAX_PAGES, 'max_images': MAX_IMAGES}
+          open('assets/pages.json','w',encoding='utf-8').write(json.dumps(page_records, indent=2, ensure_ascii=False))
+          open('assets/images.json','w',encoding='utf-8').write(json.dumps(image_records, indent=2, ensure_ascii=False))
+          open('assets/summary.json','w',encoding='utf-8').write(json.dumps(summary, indent=2, ensure_ascii=False))
+          open('assets/page-urls.txt','w',encoding='utf-8').write('\n'.join([r['url'] for r in page_records])+'\n')
+          open('assets/image-urls.txt','w',encoding='utf-8').write('\n'.join(unique_images)+'\n')
+          print(json.dumps(summary, indent=2))
           PY
-          cp assets/image-urls.txt assets/image-urls-full.txt
-          n=0
-          while IFS= read -r url; do
-            [ -n "$url" ] || continue
-            n=$((n+1))
-            base="${url%%\?*}"
-            ext="${base##*.}"
-            ext="${ext,,}"
-            case "$ext" in jpg|jpeg|png|webp|svg) ;; *) ext="bin" ;; esac
-            curl -fsSL --proto '=https' --tlsv1.2 "$url" -o "assets/asset-$(printf '%03d' "$n").$ext" || true
-          done < assets/selected-image-urls.txt
-          curl -fsSL --proto '=https' --tlsv1.2 'https://www.optics11life.com/wp-content/uploads/2024/01/Optics11-Square.png' -o assets/pavone.png
-          curl -fsSL --proto '=https' --tlsv1.2 'https://www.optics11life.com/wp-content/uploads/cuore_persprective_nobg.png' -o assets/cuore.png
-          curl -fsSL --proto '=https' --tlsv1.2 'https://www.optics11life.com/wp-content/uploads/Optics11-Life-Piuma.png' -o assets/piuma.png
-          curl -fsSL --proto '=https' --tlsv1.2 'https://www.optics11life.com/wp-content/uploads/chiaro_extremeversatilityandfelx.webp' -o assets/chiaro.webp
-          curl -fsSL --proto '=https' --tlsv1.2 'https://www.optics11life.com/wp-content/uploads/20231018_0172_00227-1024x683.webp' -o assets/home-hero.webp
-          curl -fsSL --proto '=https' --tlsv1.2 'https://www.optics11life.com/wp-content/uploads/optics11-life-white.svg' -o assets/logo-white.svg
-          file assets/* | tee assets/file-report.txt
-      - name: Upload visual assets
+      - name: Capture desktop screenshots for discovered pages
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd assets
+          npm init -y >/dev/null 2>&1
+          npm install playwright@1.56.0 --no-audit --no-fund >/dev/null
+          npx playwright install chromium >/dev/null
+          node <<'JS'
+          const fs = require('fs');
+          const { chromium } = require('playwright');
+          const pages = JSON.parse(fs.readFileSync('pages.json','utf8')).filter(p => p.url && !p.fetch_error);
+          (async()=>{
+            const browser = await chromium.launch({headless:true});
+            const page = await browser.newPage({viewport:{width:1440,height:1100}, deviceScaleFactor:1});
+            const out = [];
+            for (const p of pages.slice(0,120)) {
+              const idx = String(p.index).padStart(3,'0');
+              const file = `screenshots/${idx}-${p.slug}.png`;
+              try {
+                await page.goto(p.url, {waitUntil:'networkidle', timeout:30000});
+                await page.screenshot({path:file, fullPage:false});
+                out.push({...p, screenshot:file});
+                console.log('screenshot', p.url);
+              } catch (e) {
+                out.push({...p, screenshot_error:String(e)});
+                console.log('screenshot-failed', p.url, String(e));
+              }
+            }
+            await browser.close();
+            fs.writeFileSync('screenshots.json', JSON.stringify(out,null,2));
+          })().catch(e=>{ console.error(e); process.exit(1); });
+          JS
+      - name: Write file report
+        shell: bash
+        run: |
+          find assets -maxdepth 3 -type f | sort > assets/file-list.txt
+          du -ah assets | sort -h | tail -100 > assets/size-report.txt
+      - name: Upload all-page visual evidence
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: optics11-public-visual-assets
+          name: optics11-all-pages-visual-evidence
           path: assets/
           retention-days: 7
