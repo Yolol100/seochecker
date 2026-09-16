@@ -13,20 +13,53 @@ permissions:
 jobs:
   capture:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 8
     steps:
-      - name: Download exact public assets referenced by current homepage HTML
+      - name: Download broad public assets referenced by current Optics11 pages
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p assets
+          pages=(
+            'https://www.optics11life.com/'
+            'https://www.optics11life.com/products/'
+            'https://www.optics11life.com/service-support/'
+            'https://www.optics11life.com/resources/'
+            'https://www.optics11life.com/contact/'
+            'https://www.optics11life.com/solutions/'
+            'https://www.optics11life.com/product/pavone/'
+            'https://www.optics11life.com/product/cuore/'
+            'https://www.optics11life.com/product/piuma/'
+            'https://www.optics11life.com/product/chiaro/'
+          )
+          : > assets/pages.txt
+          for page in "${pages[@]}"; do
+            echo "$page" >> assets/pages.txt
+            curl -fsSL --proto '=https' --tlsv1.2 "$page" >> assets/all-pages.html || true
+          done
+          grep -Eo 'https://www\.optics11life\.com/wp-content/uploads/[^"'"' )]+' assets/all-pages.html \
+            | sed 's/&amp;/\&/g' \
+            | grep -E '\.(png|jpg|jpeg|webp|svg)(\?.*)?$' \
+            | sort -u > assets/image-urls.txt
+          cp assets/image-urls.txt assets/image-urls-full.txt
+          # Keep the current deck focused: product, service, lab, people, logo and content imagery.
+          grep -Ei '(pavone|cuore|piuma|chiaro|Optics11|optics11|service|training|support|HQ|headquarters|20231018|mechanobiology|contractility|application|sample|lab|muscle|spheroid|organoid|newsletter|white|logo|nano|fiber|indent)' assets/image-urls.txt > assets/selected-image-urls.txt || true
+          if [ ! -s assets/selected-image-urls.txt ]; then cp assets/image-urls.txt assets/selected-image-urls.txt; fi
+          n=0
+          while IFS= read -r url; do
+            n=$((n+1))
+            ext="${url%%\?*}"; ext="${ext##*.}"; ext="${ext,,}"
+            case "$ext" in jpg|jpeg|png|webp|svg) ;; *) ext="bin" ;; esac
+            curl -fsSL --proto '=https' --tlsv1.2 "$url" -o "assets/asset-$(printf '%03d' "$n").$ext" || true
+          done < assets/selected-image-urls.txt
+          # Explicit must-have assets used in the deck.
           curl -fsSL --proto '=https' --tlsv1.2 'https://www.optics11life.com/wp-content/uploads/2024/01/Optics11-Square.png' -o assets/pavone.png
           curl -fsSL --proto '=https' --tlsv1.2 'https://www.optics11life.com/wp-content/uploads/cuore_persprective_nobg.png' -o assets/cuore.png
           curl -fsSL --proto '=https' --tlsv1.2 'https://www.optics11life.com/wp-content/uploads/Optics11-Life-Piuma.png' -o assets/piuma.png
           curl -fsSL --proto '=https' --tlsv1.2 'https://www.optics11life.com/wp-content/uploads/chiaro_extremeversatilityandfelx.webp' -o assets/chiaro.webp
           curl -fsSL --proto '=https' --tlsv1.2 'https://www.optics11life.com/wp-content/uploads/20231018_0172_00227-1024x683.webp' -o assets/home-hero.webp
           curl -fsSL --proto '=https' --tlsv1.2 'https://www.optics11life.com/wp-content/uploads/optics11-life-white.svg' -o assets/logo-white.svg
-          file assets/*
+          file assets/* | tee assets/file-report.txt
       - name: Upload visual assets
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
