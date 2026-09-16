@@ -1,0 +1,35 @@
+name: Optics11 Case Visual Assets
+
+on:
+  push:
+    branches:
+      - runtime/optics11-life-20260916-2000
+    paths:
+      - '.github/workflows/optics11-assets.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Download exact public assets referenced by current homepage HTML
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p assets
+          curl -fsSL --proto '=https' --tlsv1.2 'https://www.optics11life.com/wp-content/uploads/2024/01/Optics11-Square.png' -o assets/pavone.png
+          curl -fsSL --proto '=https' --tlsv1.2 'https://www.optics11life.com/wp-content/uploads/cuore_persprective_nobg.png' -o assets/cuore.png
+          curl -fsSL --proto '=https' --tlsv1.2 'https://www.optics11life.com/wp-content/uploads/Optics11-Life-Piuma.png' -o assets/piuma.png
+          curl -fsSL --proto '=https' --tlsv1.2 'https://www.optics11life.com/wp-content/uploads/chiaro_extremeversatilityandfelx.webp' -o assets/chiaro.webp
+          curl -fsSL --proto '=https' --tlsv1.2 'https://www.optics11life.com/wp-content/uploads/20231018_0172_00227-1024x683.webp' -o assets/home-hero.webp
+          curl -fsSL --proto '=https' --tlsv1.2 'https://www.optics11life.com/wp-content/uploads/optics11-life-white.svg' -o assets/logo-white.svg
+          file assets/*
+      - name: Upload visual assets
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: optics11-public-visual-assets
+          path: assets/
+          retention-days: 7
