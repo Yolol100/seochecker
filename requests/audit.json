@@ -1,0 +1,28 @@
+{
+  "enabled": true,
+  "request_id": "optics11-life-20260916-2000",
+  "owner": "seo",
+  "project_id": "project-seo",
+  "for": "Optics11 Life case presentation",
+  "task": "Bounded public technical SEO audit for current website evidence",
+  "why": "Add real scan evidence and old-new website recommendations to the interview PowerPoint",
+  "trigger_when": "Manual case verification and presentation QA",
+  "do_not_trigger_when": "When target ownership or public crawl permission is unclear",
+  "requested_by": "Andrew Baeten via ChatGPT",
+  "url": "https://www.optics11life.com/",
+  "urls": [
+    "https://www.optics11life.com/products/",
+    "https://www.optics11life.com/service-support/",
+    "https://www.optics11life.com/contact/",
+    "https://www.optics11life.com/resources/"
+  ],
+  "crawl_scope": "bounded",
+  "sitewide_max_urls": 500,
+  "render_js": false,
+  "trusted_render_target": false,
+  "fail_on_regression": false,
+  "source_context": {
+    "project_id": "project-seo",
+    "source_set_version": "optics11-case-2026-09-16"
+  }
+}
