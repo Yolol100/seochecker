@@ -154,8 +154,8 @@ def fetch_bytes(url: str, *, timeout: float = 20, max_bytes: int = 8_000_000, he
     raise ValueError(f"te veel redirects voor {url}")
 
 
-def fetch_text(url: str, *, timeout: float = 20, max_bytes: int = 8_000_000, headers: dict[str, str] | None = None) -> SafeResponse:
-    response = fetch_bytes(url, timeout=timeout, max_bytes=max_bytes, headers=headers)
+def fetch_text(url: str, *, timeout: float = 20, max_bytes: int = 8_000_000, headers: dict[str, str] | None = None, allow_truncate: bool = False) -> SafeResponse:
+    response = fetch_bytes(url, timeout=timeout, max_bytes=max_bytes, headers=headers, allow_truncate=allow_truncate)
     content_type = response.headers.get("Content-Type", "")
     charset = "utf-8"
     for part in content_type.split(";")[1:]:
