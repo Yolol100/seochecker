@@ -17,8 +17,11 @@ except ImportError:
     from safe_http import fetch_text
     from validate_target import validate_target
 
-USER_AGENT = "WebactueelSEOChecker/1.8 (+https://github.com/Yolol100/seochecker)"
+USER_AGENT = "WebactueelSEOChecker/1.9 (+https://github.com/Yolol100/seochecker)"
 ROBOTS_MAX_RULES = 10000
+GOOGLEBOT_SEARCH_TEXT_LIMIT_BYTES = 2_000_000
+GOOGLEBOT_SEARCH_LIMIT_SOURCE = "https://developers.google.com/search/docs/crawling-indexing/googlebot"
+GOOGLEBOT_SEARCH_LIMIT_CHECKED_AT = "2026-09-18"
 
 
 class PageParser(HTMLParser):
@@ -262,17 +265,42 @@ def analyze_html(html, base_url):
     return {"title": title, "title_length": len(title), "meta_descriptions": descriptions, "meta_description_lengths": [len(value) for value in descriptions], "robots": robots, "googlebot": googlebot, "h1": parser.h1s, "h1_count": len(parser.h1s), "canonical": canonical, "canonical_self_referencing": len(canonical) == 1 and _normalize_url(canonical[0]) == _normalize_url(base_url), "hreflang": hreflang, "hreflang_duplicate_languages": duplicates, "hreflang_invalid_languages": invalid, "hreflang_self_reference": hreflang_self_reference, "pagination_next": pagination_next, "pagination_prev": pagination_prev, "jsonld_blocks": len(parser.jsonld_raw), "jsonld_types": sorted(jsonld_types), "jsonld_errors": jsonld_errors, "indexability_blockers": blockers, "warnings": warnings}
 
 
-def fetch(url, timeout=20):
+def fetch(url, timeout=20, *, max_bytes=8_000_000, allow_truncate=False, accept_encoding=None):
     validate_target(url)
-    response = fetch_text(url, timeout=timeout, max_bytes=8_000_000, headers={"User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml,*/*;q=0.8"})
-    return response.status, response.url, response.headers, response.body
+    request_headers = {"User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml,*/*;q=0.8"}
+    if accept_encoding:
+        request_headers["Accept-Encoding"] = accept_encoding
+    response = fetch_text(
+        url,
+        timeout=timeout,
+        max_bytes=max_bytes,
+        headers=request_headers,
+        allow_truncate=allow_truncate,
+    )
+    return response.status, response.url, response.headers, response.body, response.truncated
 
 
-def probe(url, timeout=10):
+def probe(url, timeout=10, *, max_bytes=8_000_000, allow_truncate=False, accept_encoding=None):
     try:
-        status, final_url, headers, body = fetch(url, timeout)
+        status, final_url, headers, body, truncated = fetch(
+            url,
+            timeout,
+            max_bytes=max_bytes,
+            allow_truncate=allow_truncate,
+            accept_encoding=accept_encoding,
+        )
         x_robots = headers.get_all("X-Robots-Tag") or []
-        return {"url": url, "status": status, "final_url": final_url, "content_type": headers.get("Content-Type", ""), "x_robots_tag": [value.strip() for value in x_robots if value and value.strip()], "body": body}
+        return {
+            "url": url,
+            "status": status,
+            "final_url": final_url,
+            "content_type": headers.get("Content-Type", ""),
+            "content_encoding": headers.get("Content-Encoding", ""),
+            "x_robots_tag": [value.strip() for value in x_robots if value and value.strip()],
+            "body_bytes_observed": len(body.encode("utf-8")) if isinstance(body, str) else len(body),
+            "body_truncated": bool(truncated),
+            "body": body,
+        }
     except (TimeoutError, OSError, ValueError) as exc:
         return {"url": url, "status": None, "error": str(exc)}
 
@@ -322,14 +350,55 @@ def _origin_evidence(final_url: str, origin_cache: dict | None = None):
     return result
 
 
+def googlebot_fetch_limit_evidence(page: dict) -> dict:
+    encoding = str(page.get("content_encoding") or "").strip().lower()
+    truncated = bool(page.get("body_truncated"))
+    observed = int(page.get("body_bytes_observed") or 0)
+    comparable = encoding in {"", "identity"}
+    if not comparable:
+        state = "unknown_compressed_response"
+    elif truncated:
+        state = "exceeds_googlebot_search_text_limit"
+    else:
+        state = "within_observed_googlebot_search_text_limit"
+    return {
+        "applies_to": "supported_non_pdf_file_types",
+        "threshold_bytes": GOOGLEBOT_SEARCH_TEXT_LIMIT_BYTES,
+        "threshold_source": GOOGLEBOT_SEARCH_LIMIT_SOURCE,
+        "threshold_checked_at": GOOGLEBOT_SEARCH_LIMIT_CHECKED_AT,
+        "data_basis": "uncompressed_response_body_requested_with_accept_encoding_identity",
+        "http_header_bytes_included": False,
+        "content_encoding": encoding or "identity_or_unspecified",
+        "observed_body_bytes": observed,
+        "truncated_at_threshold": truncated,
+        "comparison_state": state,
+        "limitation": (
+            "Google documents the Search limit for uncompressed data; this probe requests identity encoding and "
+            "measures response-body bytes only. It does not count HTTP header bytes."
+        ),
+    }
+
+
 def run(url, origin_cache: dict | None = None):
-    page = probe(url, 25)
+    page = probe(
+        url,
+        25,
+        max_bytes=GOOGLEBOT_SEARCH_TEXT_LIMIT_BYTES,
+        allow_truncate=True,
+        accept_encoding="identity",
+    )
     result = {"requested_url": url, "http": {k: v for k, v in page.items() if k != "body"}}
     if page.get("status") is None or page.get("status", 999) >= 400:
         result["indexability_blockers"] = [f"pagina niet bruikbaar: HTTP {page.get('status') or 'fout'}"]; result["warnings"] = []; return result
     final_url = page["final_url"]; content_type = page.get("content_type", "").lower(); is_html = not content_type or "text/html" in content_type or "application/xhtml+xml" in content_type
     result["content_type_is_html"] = is_html
-    if is_html: result.update(analyze_html(page.get("body", ""), final_url))
+    if is_html:
+        result["googlebot_fetch_limit"] = googlebot_fetch_limit_evidence(page)
+        result.update(analyze_html(page.get("body", ""), final_url))
+        if page.get("body_truncated"):
+            result.setdefault("warnings", []).append(
+                "response exceeds the current Googlebot Search 2 MB non-PDF fetch prefix; HTML after the measured prefix was not inspected"
+            )
     else: result.update({"indexability_blockers": [], "warnings": ["response is geen HTML; HTML-specifieke checks zijn overgeslagen"]})
     if _x_robots_has_noindex(page.get("x_robots_tag")): result.setdefault("indexability_blockers", []).append("X-Robots-Tag bevat noindex voor Googlebot")
     origin_evidence = _origin_evidence(final_url, origin_cache)
