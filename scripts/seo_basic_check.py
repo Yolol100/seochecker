@@ -277,12 +277,12 @@ def fetch(url, timeout=20, *, max_bytes=8_000_000, allow_truncate=False, accept_
         headers=request_headers,
         allow_truncate=allow_truncate,
     )
-    return response.status, response.url, response.headers, response.body, response.truncated
+    return response.status, response.url, response.headers, response.body, response.truncated, response.bytes_observed
 
 
 def probe(url, timeout=10, *, max_bytes=8_000_000, allow_truncate=False, accept_encoding=None):
     try:
-        status, final_url, headers, body, truncated = fetch(
+        status, final_url, headers, body, truncated, bytes_observed = fetch(
             url,
             timeout,
             max_bytes=max_bytes,
@@ -297,7 +297,7 @@ def probe(url, timeout=10, *, max_bytes=8_000_000, allow_truncate=False, accept_
             "content_type": headers.get("Content-Type", ""),
             "content_encoding": headers.get("Content-Encoding", ""),
             "x_robots_tag": [value.strip() for value in x_robots if value and value.strip()],
-            "body_bytes_observed": len(body.encode("utf-8")) if isinstance(body, str) else len(body),
+            "body_bytes_observed": int(bytes_observed),
             "body_truncated": bool(truncated),
             "body": body,
         }
