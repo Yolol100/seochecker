@@ -6,7 +6,7 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from seo_basic_check import _parse_robots, analyze_html, fetch, robots_crawlability, robots_fetch_interpretation
+from seo_basic_check import _parse_robots, analyze_html, fetch, googlebot_fetch_limit_evidence, robots_crawlability, robots_fetch_interpretation
 
 
 class AnalyzeHtmlTests(unittest.TestCase):
@@ -128,6 +128,35 @@ class RobotsCrawlabilityTests(unittest.TestCase):
         for status in (200, 204, 206):
             with self.subTest(status=status):
                 self.assertEqual(robots_fetch_interpretation(status)["state"], "rules_available")
+
+
+
+class GooglebotFetchLimitTests(unittest.TestCase):
+    def test_marks_truncated_identity_response_as_over_limit(self):
+        evidence = googlebot_fetch_limit_evidence({
+            "content_encoding": "",
+            "body_truncated": True,
+            "body_bytes_observed": 2_000_000,
+        })
+        self.assertEqual(evidence["threshold_bytes"], 2_000_000)
+        self.assertEqual(evidence["comparison_state"], "exceeds_googlebot_search_text_limit")
+        self.assertTrue(evidence["truncated_at_threshold"])
+
+    def test_marks_identity_response_within_limit(self):
+        evidence = googlebot_fetch_limit_evidence({
+            "content_encoding": "identity",
+            "body_truncated": False,
+            "body_bytes_observed": 1_999_999,
+        })
+        self.assertEqual(evidence["comparison_state"], "within_observed_googlebot_search_text_limit")
+
+    def test_does_not_claim_comparability_for_encoded_response(self):
+        evidence = googlebot_fetch_limit_evidence({
+            "content_encoding": "gzip",
+            "body_truncated": True,
+            "body_bytes_observed": 2_000_000,
+        })
+        self.assertEqual(evidence["comparison_state"], "unknown_compressed_response")
 
 
 class PublicTargetSafetyTests(unittest.TestCase):
