@@ -25,6 +25,7 @@ class SafeResponse:
     body: bytes
     connected_ip: str
     truncated: bool = False
+    bytes_observed: int = 0
 
 
 def _validated_url(url: str):
@@ -126,7 +127,7 @@ def fetch_bytes(url: str, *, timeout: float = 20, max_bytes: int = 8_000_000, he
                 conn.request("GET", path, headers=hop_headers)
                 raw = conn.getresponse()
                 body, truncated = _read_limited(raw, max_bytes, allow_truncate=allow_truncate)
-                response = SafeResponse(raw.status, current, raw.headers, body, ip, truncated)
+                response = SafeResponse(raw.status, current, raw.headers, body, ip, truncated, len(body))
                 connected_ip = ip
                 break
             except (OSError, ssl.SSLError, http.client.HTTPException) as exc:
