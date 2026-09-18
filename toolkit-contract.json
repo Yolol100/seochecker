@@ -8,146 +8,22 @@
   "requires_api_key": false,
   "requires_mcp": false,
   "tools": [
-    {
-      "id": "safe-http",
-      "version": "1.7",
-      "trigger_when": "every repository-owned HTTP, redirect, sitemap or snapshot request",
-      "outputs": [
-        "pinned public-IP HTTP observations"
-      ]
-    },
-    {
-      "id": "core-indexability",
-      "version": "1.9",
-      "trigger_when": "every technical audit; collect HTTP, HTML indexability, current Googlebot Search 2 MB non-PDF fetch-prefix evidence and Google-current robots.txt crawlability evidence without conflating crawlability with indexability",
-      "outputs": [
-        "reports/basic-seo.json"
-      ]
-    },
-    {
-      "id": "url-batch",
-      "version": "1",
-      "trigger_when": "after the effective URL scope resolves; collect stable repository-owned HTTP evidence across the exact effective URL set",
-      "outputs": [
-        "reports/url-batch.json"
-      ]
-    },
-    {
-      "id": "sitemap-extraction",
-      "version": "1.3",
-      "trigger_when": "after URL batch evidence; extract advertised public sitemap URLs within strict network and resource bounds for graph reconciliation",
-      "outputs": [
-        "reports/sitemap-extraction.json",
-        "reports/sitemap-urls.txt"
-      ]
-    },
-    {
-      "id": "siteone-resolve",
-      "version": "3",
-      "trigger_when": "trusted_render_target=true before any SiteOne network crawl; validate requested origins as public, record explicit preflight evidence and intentionally emit no forced-IP args for SiteOne 2.5.1 HTTPS",
-      "outputs": [
-        "reports/siteone-network-preflight.json"
-      ]
-    },
-    {
-      "id": "siteone",
-      "version": "2.5.1",
-      "trigger_when": "trusted_render_target=true; required for sitewide discovery",
-      "outputs": [
-        "reports/siteone.json",
-        "reports/siteone.html"
-      ]
-    },
-    {
-      "id": "siteone-browser",
-      "version": "2.5.1",
-      "trigger_when": "rendered DOM evidence can change the decision and trusted_render_target=true",
-      "outputs": [
-        "reports/siteone-rendered.json",
-        "reports/siteone-rendered.html",
-        "reports/rendered-technical-findings.json"
-      ]
-    },
-    {
-      "id": "bounded-url-list",
-      "version": "2",
-      "trigger_when": "SEO supplies a bounded runtime URL set from GSC, Ahrefs, sitemap or another source",
-      "outputs": [
-        "reports/runtime-urls.txt",
-        "reports/effective-urls.txt",
-        "reports/crawl-scope.json"
-      ]
-    },
-    {
-      "id": "sitewide-discovery",
-      "version": "2",
-      "trigger_when": "trusted target and caller explicitly requests sitewide scope with a hard URL cap",
-      "outputs": [
-        "reports/effective-urls.txt",
-        "reports/crawl-scope.json"
-      ]
-    },
-    {
-      "id": "technical-evidence",
-      "version": "1.3",
-      "trigger_when": "technical output must be normalized, related or compared, including separate Googlebot crawlability state",
-      "outputs": [
-        "reports/technical-findings.json",
-        "reports/technical-graph.json"
-      ]
-    },
-    {
-      "id": "regression-baseline",
-      "version": "1.2",
-      "trigger_when": "baseline_run_id is supplied for scan-fix-retest; accept only a successful hash-bound baseline with compatible manifest/findings/graph schemas",
-      "outputs": [
-        "reports/baseline-validation.json",
-        "reports/regression-diff.json"
-      ]
-    },
-    {
-      "id": "lighthouse-ci",
-      "version": "0.15.1",
-      "trigger_when": "trusted_render_target=true and lab performance evidence is part of the audit",
-      "outputs": [
-        "reports/lighthouse-summary.json",
-        ".lighthouseci/"
-      ]
-    },
-    {
-      "id": "safe-html-snapshot",
-      "version": "1",
-      "trigger_when": "every technical audit before local markup validation",
-      "outputs": [
-        "reports/target-snapshot.html",
-        "reports/target-snapshot.json"
-      ]
-    },
-    {
-      "id": "nu-html-checker",
-      "version": "official-latest-digest-verified",
-      "trigger_when": "every technical audit; resolve the current official validator/validator latest vnu.jar and verify its GitHub release SHA-256 before local-only validation",
-      "outputs": [
-        "reports/vnu-tool-metadata.json",
-        "reports/w3c-nu.json"
-      ]
-    },
-    {
-      "id": "evidence-manifest",
-      "version": "1.2",
-      "trigger_when": "every technical audit",
-      "outputs": [
-        "reports/evidence-manifest.json"
-      ]
-    },
-    {
-      "id": "page-expectations",
-      "version": "3",
-      "trigger_when": "explicit post-publication expectations are supplied",
-      "outputs": [
-        "caller-selected JSON report"
-      ]
-    }
+    {"id":"safe-http","version":"1.7","trigger_when":"every repository-owned HTTP, redirect, sitemap or snapshot request","outputs":["pinned public-IP HTTP observations"]},
+    {"id":"core-indexability","version":"1.9","trigger_when":"every technical audit; collect HTTP, HTML indexability, current Googlebot Search 2 MB non-PDF fetch-prefix evidence and Google-current robots.txt crawlability evidence without conflating crawlability with indexability","outputs":["reports/basic-seo.json"]},
+    {"id":"url-batch","version":"1","trigger_when":"after the effective URL scope resolves; collect stable repository-owned HTTP evidence across the exact effective URL set","outputs":["reports/url-batch.json"]},
+    {"id":"sitemap-extraction","version":"1.3","trigger_when":"after URL batch evidence; extract advertised public sitemap URLs within strict network and resource bounds for graph reconciliation","outputs":["reports/sitemap-extraction.json","reports/sitemap-urls.txt"]},
+    {"id":"siteone-resolve","version":"3","trigger_when":"trusted_render_target=true before any SiteOne network crawl; validate requested origins as public, record explicit preflight evidence and intentionally emit no forced-IP args for SiteOne 2.5.1 HTTPS","outputs":["reports/siteone-network-preflight.json"]},
+    {"id":"siteone","version":"2.5.1","trigger_when":"trusted_render_target=true; required for sitewide discovery","outputs":["reports/siteone.json","reports/siteone.html"]},
+    {"id":"siteone-browser","version":"2.5.1","trigger_when":"rendered DOM evidence can change the decision and trusted_render_target=true","outputs":["reports/siteone-rendered.json","reports/siteone-rendered.html","reports/rendered-technical-findings.json"]},
+    {"id":"bounded-url-list","version":"2","trigger_when":"SEO supplies a bounded runtime URL set from GSC, Ahrefs, sitemap or another source","outputs":["reports/runtime-urls.txt","reports/effective-urls.txt","reports/crawl-scope.json"]},
+    {"id":"sitewide-discovery","version":"2","trigger_when":"trusted target and caller explicitly requests sitewide scope with a hard URL cap","outputs":["reports/effective-urls.txt","reports/crawl-scope.json"]},
+    {"id":"technical-evidence","version":"1.3","trigger_when":"technical output must be normalized, related or compared, including separate Googlebot crawlability state","outputs":["reports/technical-findings.json","reports/technical-graph.json"]},
+    {"id":"regression-baseline","version":"1.2","trigger_when":"baseline_run_id is supplied for scan-fix-retest; accept only a successful hash-bound baseline with compatible manifest/findings/graph schemas","outputs":["reports/baseline-validation.json","reports/regression-diff.json"]},
+    {"id":"lighthouse-ci","version":"0.15.1","trigger_when":"trusted_render_target=true and lab performance evidence is part of the audit","outputs":["reports/lighthouse-summary.json",".lighthouseci/"]},
+    {"id":"safe-html-snapshot","version":"1","trigger_when":"every technical audit before local markup validation","outputs":["reports/target-snapshot.html","reports/target-snapshot.json"]},
+    {"id":"nu-html-checker","version":"official-latest-digest-verified","trigger_when":"every technical audit; resolve the current official validator/validator latest vnu.jar and verify its GitHub release SHA-256 before local-only validation","outputs":["reports/vnu-tool-metadata.json","reports/w3c-nu.json"]},
+    {"id":"evidence-manifest","version":"1.2","trigger_when":"every technical audit","outputs":["reports/evidence-manifest.json"]},
+    {"id":"page-expectations","version":"3","trigger_when":"explicit post-publication expectations are supplied","outputs":["caller-selected JSON report"]}
   ],
   "input_contract": {
     "owner": "seo",
@@ -163,100 +39,26 @@
       "optional prior successful SEO Audit run id for hash-bound and schema-compatible regression comparison",
       "optional source-set version for provenance"
     ],
-    "forbidden_on_main": [
-      "client/site-specific URL inventories",
-      "GSC exports",
-      "Ahrefs exports",
-      "source-set snapshots",
-      "run-specific evidence"
-    ]
+    "forbidden_on_main": ["client/site-specific URL inventories","GSC exports","Ahrefs exports","source-set snapshots","run-specific evidence"]
   },
   "usage_assertions": [
-    {
-      "tool": "safe-http",
-      "path": "scripts/safe_http.py",
-      "contains": "_PinnedHTTPSConnection"
-    },
-    {
-      "tool": "core-indexability",
-      "path": "scripts/seo_basic_check.py",
-      "contains": "robots_fetch_interpretation"
-    },
-    {
-      "tool": "url-batch",
-      "path": ".github/workflows/seo-audit.yml",
-      "contains": "Stable effective URL batch evidence"
-    },
-    {
-      "tool": "sitemap-extraction",
-      "path": ".github/workflows/seo-audit.yml",
-      "contains": "Extract discovered sitemap URLs"
-    },
-    {
-      "tool": "siteone-resolve",
-      "path": "scripts/siteone_resolve.py",
-      "contains": "forced_ip_arguments_emitted"
-    },
-    {
-      "tool": "siteone",
-      "path": ".github/workflows/seo-audit.yml",
-      "contains": "SiteOne HTTP crawl with explicit scope"
-    },
-    {
-      "tool": "siteone-browser",
-      "path": ".github/workflows/seo-audit.yml",
-      "contains": "SiteOne rendered browser crawl"
-    },
-    {
-      "tool": "bounded-url-list",
-      "path": ".github/workflows/seo-audit.yml",
-      "contains": "--single-page"
-    },
-    {
-      "tool": "sitewide-discovery",
-      "path": ".github/workflows/seo-audit.yml",
-      "contains": "siteone_scope.py \"${args[@]}\""
-    },
-    {
-      "tool": "technical-evidence",
-      "path": "scripts/technical_evidence.py",
-      "contains": "crawlable_googlebot"
-    },
-    {
-      "tool": "regression-baseline",
-      "path": "scripts/validate_baseline.py",
-      "contains": "SUPPORTED_FINDINGS_SCHEMAS"
-    },
-    {
-      "tool": "lighthouse-ci",
-      "path": ".github/workflows/seo-audit.yml",
-      "contains": "Lighthouse CI collection on trusted target"
-    },
-    {
-      "tool": "safe-html-snapshot",
-      "path": ".github/workflows/seo-audit.yml",
-      "contains": "fetch_html_snapshot.py"
-    },
-    {
-      "tool": "nu-html-checker",
-      "path": ".github/workflows/seo-audit.yml",
-      "contains": "vnu-tool-metadata.json"
-    },
-    {
-      "tool": "evidence-manifest",
-      "path": "scripts/build_evidence_manifest.py",
-      "contains": "\"schema_version\": \"1.2\""
-    },
-    {
-      "tool": "page-expectations",
-      "path": "scripts/verify_page_expectations.py",
-      "contains": "fetch_text("
-    },
-    {
-      "tool": "core-indexability",
-      "path": "scripts/seo_basic_check.py",
-      "contains": "GOOGLEBOT_SEARCH_TEXT_LIMIT_BYTES"
-    }
+    {"tool":"safe-http","path":"scripts/safe_http.py","contains":"_PinnedHTTPSConnection"},
+    {"tool":"core-indexability","path":"scripts/seo_basic_check.py","contains":"robots_fetch_interpretation"},
+    {"tool":"core-indexability","path":"scripts/seo_basic_check.py","contains":"GOOGLEBOT_SEARCH_TEXT_LIMIT_BYTES"},
+    {"tool":"url-batch","path":".github/workflows/seo-audit.yml","contains":"Stable effective URL batch evidence"},
+    {"tool":"sitemap-extraction","path":".github/workflows/seo-audit.yml","contains":"Extract discovered sitemap URLs"},
+    {"tool":"siteone-resolve","path":"scripts/siteone_resolve.py","contains":"forced_ip_arguments_emitted"},
+    {"tool":"siteone","path":".github/workflows/seo-audit.yml","contains":"SiteOne HTTP crawl with explicit scope"},
+    {"tool":"siteone-browser","path":".github/workflows/seo-audit.yml","contains":"SiteOne rendered browser crawl"},
+    {"tool":"bounded-url-list","path":".github/workflows/seo-audit.yml","contains":"--single-page"},
+    {"tool":"sitewide-discovery","path":".github/workflows/seo-audit.yml","contains":"siteone_scope.py \"${args[@]}\""},
+    {"tool":"technical-evidence","path":"scripts/technical_evidence.py","contains":"crawlable_googlebot"},
+    {"tool":"regression-baseline","path":"scripts/validate_baseline.py","contains":"SUPPORTED_FINDINGS_SCHEMAS"},
+    {"tool":"lighthouse-ci","path":".github/workflows/seo-audit.yml","contains":"Lighthouse CI collection on trusted target"},
+    {"tool":"safe-html-snapshot","path":".github/workflows/seo-audit.yml","contains":"fetch_html_snapshot.py"},
+    {"tool":"nu-html-checker","path":".github/workflows/seo-audit.yml","contains":"vnu-tool-metadata.json"},
+    {"tool":"evidence-manifest","path":"scripts/build_evidence_manifest.py","contains":"\"schema_version\": \"1.2\""},
+    {"tool":"page-expectations","path":"scripts/verify_page_expectations.py","contains":"fetch_text("}
   ],
   "boundaries": [
     "GSC remains authoritative for owned Google Search performance and Google's observed index status.",
