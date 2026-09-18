@@ -1,5 +1,5 @@
 {
-  "schema_version": "2.2",
+  "schema_version": "2.3",
   "owner_skill": "seo",
   "project_id": "project-seo",
   "repository": "Yolol100/seochecker",
@@ -8,8 +8,8 @@
   "requires_api_key": false,
   "requires_mcp": false,
   "tools": [
-    {"id":"safe-http","version":"1.6","trigger_when":"every repository-owned HTTP, redirect, sitemap or snapshot request","outputs":["pinned public-IP HTTP observations"]},
-    {"id":"core-indexability","version":"1.8","trigger_when":"every technical audit; collect HTTP, HTML indexability and Google-current robots.txt crawlability evidence without conflating crawlability with indexability","outputs":["reports/basic-seo.json"]},
+    {"id":"safe-http","version":"1.7","trigger_when":"every repository-owned HTTP, redirect, sitemap or snapshot request","outputs":["pinned public-IP HTTP observations"]},
+    {"id":"core-indexability","version":"1.9","trigger_when":"every technical audit; collect HTTP, HTML indexability, current Googlebot Search 2 MB non-PDF fetch-prefix evidence and Google-current robots.txt crawlability evidence without conflating crawlability with indexability","outputs":["reports/basic-seo.json"]},
     {"id":"url-batch","version":"1","trigger_when":"after the effective URL scope resolves; collect stable repository-owned HTTP evidence across the exact effective URL set","outputs":["reports/url-batch.json"]},
     {"id":"sitemap-extraction","version":"1.3","trigger_when":"after URL batch evidence; extract advertised public sitemap URLs within strict network and resource bounds for graph reconciliation","outputs":["reports/sitemap-extraction.json","reports/sitemap-urls.txt"]},
     {"id":"siteone-resolve","version":"3","trigger_when":"trusted_render_target=true before any SiteOne network crawl; validate requested origins as public, record explicit preflight evidence and intentionally emit no forced-IP args for SiteOne 2.5.1 HTTPS","outputs":["reports/siteone-network-preflight.json"]},
@@ -44,6 +44,7 @@
   "usage_assertions": [
     {"tool":"safe-http","path":"scripts/safe_http.py","contains":"_PinnedHTTPSConnection"},
     {"tool":"core-indexability","path":"scripts/seo_basic_check.py","contains":"robots_fetch_interpretation"},
+    {"tool":"core-indexability","path":"scripts/seo_basic_check.py","contains":"GOOGLEBOT_SEARCH_TEXT_LIMIT_BYTES"},
     {"tool":"url-batch","path":".github/workflows/seo-audit.yml","contains":"Stable effective URL batch evidence"},
     {"tool":"sitemap-extraction","path":".github/workflows/seo-audit.yml","contains":"Extract discovered sitemap URLs"},
     {"tool":"siteone-resolve","path":"scripts/siteone_resolve.py","contains":"forced_ip_arguments_emitted"},
@@ -84,6 +85,7 @@
     "New warning/error relationship issues are regressions; new informational relationship observations are not automatically regressions.",
     "External URL selection does not import external source semantics into repository output.",
     "Tool findings are diagnostics; SEO owns interpretation and prioritization.",
-    "Client, target and run-specific truth belongs in runtime input or artifacts, not permanently on main."
+    "Client, target and run-specific truth belongs in runtime input or artifacts, not permanently on main.",
+    "Current Googlebot Search non-PDF fetch-prefix evidence is source-dated and bounded at 2,000,000 uncompressed response-body bytes when identity encoding is honored; the checker records that HTTP header bytes are not included and never presents this as a byte-for-byte Google crawler emulation."
   ]
 }
