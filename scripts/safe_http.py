@@ -24,6 +24,7 @@ class SafeResponse:
     headers: http.client.HTTPMessage
     body: bytes
     connected_ip: str
+    truncated: bool = False
 
 
 def _validated_url(url: str):
@@ -91,7 +92,15 @@ def _host_header(parsed) -> str:
     return host
 
 
-def fetch_bytes(url: str, *, timeout: float = 20, max_bytes: int = 8_000_000, headers: dict[str, str] | None = None, max_redirects: int = 10) -> SafeResponse:
+def _read_limited(raw, max_bytes: int, *, allow_truncate: bool = False) -> tuple[bytes, bool]:
+    body = raw.read(max_bytes + 1)
+    truncated = len(body) > max_bytes
+    if truncated and not allow_truncate:
+        raise ValueError(f"response exceeds max_bytes={max_bytes}")
+    return (body[:max_bytes] if truncated else body), truncated
+
+
+def fetch_bytes(url: str, *, timeout: float = 20, max_bytes: int = 8_000_000, headers: dict[str, str] | None = None, max_redirects: int = 10, allow_truncate: bool = False) -> SafeResponse:
     if max_bytes < 0:
         raise ValueError("max_bytes must be non-negative")
     current = str(url).strip()
@@ -116,10 +125,8 @@ def fetch_bytes(url: str, *, timeout: float = 20, max_bytes: int = 8_000_000, he
                 conn = _PinnedHTTPSConnection(parsed.hostname or "", port, ip, timeout) if parsed.scheme == "https" else _PinnedHTTPConnection(parsed.hostname or "", port, ip, timeout)
                 conn.request("GET", path, headers=hop_headers)
                 raw = conn.getresponse()
-                body = raw.read(max_bytes + 1)
-                if len(body) > max_bytes:
-                    raise ValueError(f"response exceeds max_bytes={max_bytes}: {current}")
-                response = SafeResponse(raw.status, current, raw.headers, body, ip)
+                body, truncated = _read_limited(raw, max_bytes, allow_truncate=allow_truncate)
+                response = SafeResponse(raw.status, current, raw.headers, body, ip, truncated)
                 connected_ip = ip
                 break
             except (OSError, ssl.SSLError, http.client.HTTPException) as exc:
