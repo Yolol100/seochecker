@@ -15,7 +15,27 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           EXPECTED_BRANCHES: |
-            runtime/acd-full-fix-20260910-audit|7cad6ced25cafc82bf3f8374a8c0810deb187988\n            runtime/acd-full-fix-20260910-evidence|7cad6ced25cafc82bf3f8374a8c0810deb187988\n            runtime/acd-full-fix-20260910-final|7cad6ced25cafc82bf3f8374a8c0810deb187988\n            runtime/acd-full-fix-20260910-run|7cad6ced25cafc82bf3f8374a8c0810deb187988\n            runtime/acd-full-fix-20260910|7cad6ced25cafc82bf3f8374a8c0810deb187988\n            runtime/acd-seo-audit-20260909|7cad6ced25cafc82bf3f8374a8c0810deb187988\n            runtime/closure-proof-20260911-v2|7cad6ced25cafc82bf3f8374a8c0810deb187988\n            runtime/closure-proof-20260911-v3|7cad6ced25cafc82bf3f8374a8c0810deb187988\n            runtime/closure-proof-20260911|7cad6ced25cafc82bf3f8374a8c0810deb187988\n            runtime/doctorcura-deep-20260820|7cad6ced25cafc82bf3f8374a8c0810deb187988\n            runtime/doctorcura-deep-20260821|7cad6ced25cafc82bf3f8374a8c0810deb187988\n            runtime/doctorcura-scan-20260822|7cad6ced25cafc82bf3f8374a8c0810deb187988\n            runtime/final-contract-proof-20260911|7cad6ced25cafc82bf3f8374a8c0810deb187988\n            runtime/final-proof-20260911-v4|7cad6ced25cafc82bf3f8374a8c0810deb187988\n            runtime/final-schema-proof-20260912|7cad6ced25cafc82bf3f8374a8c0810deb187988\n            runtime/gsc-dca-20260820b|7cad6ced25cafc82bf3f8374a8c0810deb187988\n            runtime/gsc-dca-test|7cad6ced25cafc82bf3f8374a8c0810deb187988\n            runtime/gsc-doctorcura-20260820|7cad6ced25cafc82bf3f8374a8c0810deb187988\n            runtime/gsc-sitemaps-retry|7cad6ced25cafc82bf3f8374a8c0810deb187988\n            runtime/seo-data-toolbox|7cad6ced25cafc82bf3f8374a8c0810deb187988\n            cleanup/repository-hygiene-20260818-1217|bf230411e7cfe45ecb2d4a145b5b6b1fc5a42a01
+            runtime/acd-full-fix-20260910-audit|7cad6ced25cafc82bf3f8374a8c0810deb187988
+            runtime/acd-full-fix-20260910-evidence|7cad6ced25cafc82bf3f8374a8c0810deb187988
+            runtime/acd-full-fix-20260910-final|7cad6ced25cafc82bf3f8374a8c0810deb187988
+            runtime/acd-full-fix-20260910-run|7cad6ced25cafc82bf3f8374a8c0810deb187988
+            runtime/acd-full-fix-20260910|7cad6ced25cafc82bf3f8374a8c0810deb187988
+            runtime/acd-seo-audit-20260909|7cad6ced25cafc82bf3f8374a8c0810deb187988
+            runtime/closure-proof-20260911-v2|7cad6ced25cafc82bf3f8374a8c0810deb187988
+            runtime/closure-proof-20260911-v3|7cad6ced25cafc82bf3f8374a8c0810deb187988
+            runtime/closure-proof-20260911|7cad6ced25cafc82bf3f8374a8c0810deb187988
+            runtime/doctorcura-deep-20260820|7cad6ced25cafc82bf3f8374a8c0810deb187988
+            runtime/doctorcura-deep-20260821|7cad6ced25cafc82bf3f8374a8c0810deb187988
+            runtime/doctorcura-scan-20260822|7cad6ced25cafc82bf3f8374a8c0810deb187988
+            runtime/final-contract-proof-20260911|7cad6ced25cafc82bf3f8374a8c0810deb187988
+            runtime/final-proof-20260911-v4|7cad6ced25cafc82bf3f8374a8c0810deb187988
+            runtime/final-schema-proof-20260912|7cad6ced25cafc82bf3f8374a8c0810deb187988
+            runtime/gsc-dca-20260820b|7cad6ced25cafc82bf3f8374a8c0810deb187988
+            runtime/gsc-dca-test|7cad6ced25cafc82bf3f8374a8c0810deb187988
+            runtime/gsc-doctorcura-20260820|7cad6ced25cafc82bf3f8374a8c0810deb187988
+            runtime/gsc-sitemaps-retry|7cad6ced25cafc82bf3f8374a8c0810deb187988
+            runtime/seo-data-toolbox|7cad6ced25cafc82bf3f8374a8c0810deb187988
+            cleanup/repository-hygiene-20260818-1217|bf230411e7cfe45ecb2d4a145b5b6b1fc5a42a01
         shell: bash
         run: |
           set -euo pipefail
