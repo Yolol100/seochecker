@@ -2,7 +2,7 @@
 
 > **Supporting engineering project · technical SEO · bounded crawling · regression evidence**
 
-**Built by:** [Andrew Baeten](https://github.com/Yolol100) · [Portfolio cases](https://andrewbaeten.nl/category/cases)
+**Developer profile:** [Andrew Baeten](https://github.com/Yolol100) · [Portfolio cases](https://andrewbaeten.nl/category/cases)
 
 SEO Checker turns public website targets into repeatable technical SEO evidence. Project SEO owns strategy and interpretation; this repository owns controlled technical observation, scope metadata and regression evidence. Ahrefs and GSC remain separate evidence sources.
 
