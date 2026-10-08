@@ -45,6 +45,17 @@ class ExhaustiveContractTests(unittest.TestCase):
         self.assertIn(JAVA_ACTION, audit)
         self.assertNotIn("actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c", audit)
 
+    def test_optional_lighthouse_setup_is_gated(self):
+        workflow = (ROOT / ".github/workflows/seo-audit.yml").read_text(encoding="utf-8")
+        self_test = workflow.split("  resolve-request:", 1)[0]
+        audit = workflow.split("  audit:", 1)[1]
+        self_guard = "if: github.event_name != 'workflow_dispatch' || inputs.trusted_render_target == true"
+        audit_guard = "if: env.TRUSTED_RENDER_TARGET == 'true'"
+        for name in ("Set up Node.js", "Install locked Node tooling", "Verify locked Lighthouse version"):
+            self.assertIn(f"      - name: {name}\n        {self_guard}\n", self_test)
+        for name in ("Set up Node.js", "Install locked Node tooling"):
+            self.assertIn(f"      - name: {name}\n        {audit_guard}\n", audit)
+
     def test_safe_http_revalidates_redirect_target_before_connecting(self):
         raw = SimpleNamespace(
             status=302,
