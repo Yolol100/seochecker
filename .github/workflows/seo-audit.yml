@@ -73,13 +73,16 @@ jobs:
         with:
           python-version: '3.14.7'
       - name: Set up Node.js
+        if: github.event_name != 'workflow_dispatch' || inputs.trusted_render_target == true
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22'
           cache: npm
       - name: Install locked Node tooling
+        if: github.event_name != 'workflow_dispatch' || inputs.trusted_render_target == true
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Verify locked Lighthouse version
+        if: github.event_name != 'workflow_dispatch' || inputs.trusted_render_target == true
         run: node -e "const p=require('./node_modules/@lhci/cli/package.json'); if(p.version!=='0.15.1') process.exit(1)"
       - name: Test checker
         run: python3 -m unittest discover -s tests -v
@@ -151,11 +154,13 @@ jobs:
         with:
           python-version: '3.14.7'
       - name: Set up Node.js
+        if: env.TRUSTED_RENDER_TARGET == 'true'
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22'
           cache: npm
       - name: Install locked Node tooling
+        if: env.TRUSTED_RENDER_TARGET == 'true'
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Prepare strict runtime URL list
         run: |
