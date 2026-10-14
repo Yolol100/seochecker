@@ -1,0 +1,22 @@
+{
+  "enabled": true,
+  "request_id": "proline-seo-archive-og-20261014",
+  "owner": "seo",
+  "project_id": "project-seo",
+  "for": "Proline Afbouw",
+  "task": "Current archive metadata diagnostic",
+  "why": "Verify paginated category canonical, og:url and H1 after Yoast taxonomy title correction",
+  "trigger_when": "Read-only crosscheck of remaining Ahrefs archive warnings",
+  "do_not_trigger_when": "Do not edit WordPress or change indexation status",
+  "requested_by": "webactueel-workflow",
+  "source_context": {
+    "project_id": "project-seo",
+    "source_set_version": "2.6.32-edward-validated-process-upgrade"
+  },
+  "url": "https://prolineafbouw.nl/category/blog/page/2/",
+  "urls": [],
+  "crawl_scope": "bounded",
+  "render_js": false,
+  "trusted_render_target": false,
+  "fail_on_regression": false
+}
