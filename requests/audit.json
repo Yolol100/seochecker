@@ -1,0 +1,29 @@
+{
+  "enabled": true,
+  "request_id": "proline-seo-gallery-readback-20261014-v1",
+  "owner": "seo",
+  "project_id": "project-seo",
+  "for": "Proline Afbouw",
+  "task": "Verify live HTML gallery links after guarded shared Elementor template update",
+  "why": "Confirm three formerly broken media lightbox links no longer occur on service pages",
+  "trigger_when": "After WordPress Connector shared carousel patch returned verified readback on 14 October 2026",
+  "do_not_trigger_when": "Not for broad sitewide crawl or production mutation",
+  "requested_by": "Webactueel Workflow",
+  "source_context": {
+    "project_id": "project-seo",
+    "source_set_version": "2.6.32-edward-validated-process-upgrade"
+  },
+  "url": "https://prolineafbouw.nl/latex-spuiten-rijswijk/",
+  "urls": [
+    "https://prolineafbouw.nl/wp-content/uploads/2025/12/63621f33-5e0b-4d7b-ac11-bf0b1cebfbf0.jpg",
+    "https://prolineafbouw.nl/wp-content/uploads/2025/12/5cfdb4ad-ad22-4fc0-83b4-7997f6872165.jpg",
+    "https://prolineafbouw.nl/wp-content/uploads/2025/12/7f9c344c-ad81-4232-8a6e-aa008587574e.jpg",
+    "https://prolineafbouw.nl/wp-content/uploads/2025/12/latex-spuiten-amsterdam-zolderruimte.jpg",
+    "https://prolineafbouw.nl/wp-content/uploads/2025/12/latex-spuiten-den-haag-renovatiewoning.jpg",
+    "https://prolineafbouw.nl/wp-content/uploads/2025/12/latex-spuiten-utrecht-renovatie-muur.jpg"
+  ],
+  "crawl_scope": "bounded",
+  "render_js": false,
+  "trusted_render_target": false,
+  "fail_on_regression": false
+}
