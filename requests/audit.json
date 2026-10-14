@@ -1,0 +1,39 @@
+{
+  "enabled": true,
+  "request_id": "proline-seo-readback-20261014-v1",
+  "owner": "seo",
+  "project_id": "project-seo",
+  "for": "Proline Afbouw",
+  "task": "Verify previous Elementor carousel and Yoast repair on production",
+  "why": "Ahrefs 13 October baseline predates the changes and lacks post-fix technical evidence",
+  "trigger_when": "After guarded WordPress Connector readback succeeded on 14 October 2026",
+  "do_not_trigger_when": "No website content mutation, no full crawl, no Google ranking inference",
+  "requested_by": "Webactueel Workflow",
+  "source_context": {
+    "project_id": "project-seo",
+    "source_set_version": "2.6.32-edward-validated-process-upgrade"
+  },
+  "url": "https://prolineafbouw.nl/",
+  "urls": [
+    "https://prolineafbouw.nl/latex-spuiten-rijswijk/",
+    "https://prolineafbouw.nl/category/blog/page/2/",
+    "https://prolineafbouw.nl/wp-content/uploads/2025/12/63621f33-5e0b-4d7b-ac11-bf0b1cebfbf0.jpg",
+    "https://prolineafbouw.nl/wp-content/uploads/2025/12/5cfdb4ad-ad22-4fc0-83b4-7997f6872165.jpg",
+    "https://prolineafbouw.nl/wp-content/uploads/2025/12/7f9c344c-ad81-4232-8a6e-aa008587574e.jpg",
+    "https://prolineafbouw.nl/wp-content/uploads/2025/01/IMG_0823-scaled.jpg",
+    "https://prolineafbouw.nl/wp-content/uploads/2025/01/IMG_0890-rotated.jpg",
+    "https://prolineafbouw.nl/wp-content/uploads/2025/01/IMG_0832-rotated.jpg",
+    "https://prolineafbouw.nl/wp-content/uploads/2025/01/IMG_0947.jpg",
+    "https://prolineafbouw.nl/wp-content/uploads/2025/12/latex-spuiten-amsterdam-zolderruimte.jpg",
+    "https://prolineafbouw.nl/wp-content/uploads/2025/12/latex-spuiten-den-haag-renovatiewoning.jpg",
+    "https://prolineafbouw.nl/wp-content/uploads/2025/12/latex-spuiten-utrecht-renovatie-muur.jpg",
+    "https://prolineafbouw.nl/wp-content/uploads/2025/01/latex-spuiten-binnenmuur-strakke-afwerking-proline-afbouw.jpg",
+    "https://prolineafbouw.nl/wp-content/uploads/2025/01/binnenschilderwerk-groene-muur-lichte-kamer.jpg",
+    "https://prolineafbouw.nl/wp-content/uploads/2025/01/latex-spuiten-wand-trap-afplakken-proline-afbouw.jpg",
+    "https://prolineafbouw.nl/wp-content/uploads/2025/01/schilderwerk-binnen-buiten-proline-afbouw.jpg"
+  ],
+  "crawl_scope": "bounded",
+  "render_js": false,
+  "trusted_render_target": false,
+  "fail_on_regression": false
+}
