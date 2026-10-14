@@ -1,0 +1,22 @@
+{
+  "enabled": true,
+  "request_id": "proline-seo-performance-20261014-v1",
+  "owner": "seo",
+  "project_id": "project-seo",
+  "for": "Proline Afbouw",
+  "task": "Production Lighthouse laboratory performance diagnostic",
+  "why": "Read-only lab verification of 53 Ahrefs slow page warnings and earlier stale validator dependency",
+  "trigger_when": "After independent fast QA signals required stronger performance evidence",
+  "do_not_trigger_when": "No production changes, no indexation or field Core Web Vitals claims",
+  "requested_by": "webactueel-workflow",
+  "source_context": {
+    "project_id": "project-seo",
+    "source_set_version": "2.6.32-edward-validated-process-upgrade"
+  },
+  "url": "https://prolineafbouw.nl/",
+  "urls": [],
+  "crawl_scope": "bounded",
+  "render_js": false,
+  "trusted_render_target": true,
+  "fail_on_regression": false
+}
