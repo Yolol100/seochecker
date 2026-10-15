@@ -1,0 +1,27 @@
+{
+  "enabled": true,
+  "request_id": "byderma-final-qa-20261015",
+  "owner": "seo",
+  "project_id": "project-seo",
+  "for": "Independently validate byderma.nl technical SEO after Yoast and Elementor repairs",
+  "task": "Controlled post-fix SEO evidence and regression audit",
+  "why": "Ahrefs last crawl was 2026-10-12, older than WordPress changes; use a bounded new technical observation",
+  "trigger_when": "Explicit 2026-10-15 user request for independent final SEO audit of byderma.nl",
+  "do_not_trigger_when": "Unauthorized target, unavailable public DNS or any active crawl that may change site content",
+  "requested_by": "User authorized Webactueel Byderma owner",
+  "source_context": {
+    "project_id": "project-seo",
+    "source_set_version": "2.6.33-compact-source-index-20261015"
+  },
+  "url": "https://byderma.nl/",
+  "urls": [
+    "https://byderma.nl/product/masque-nutri-apaisant/",
+    "https://byderma.nl/product-categorie/skincare/",
+    "https://byderma.nl/sitemap/"
+  ],
+  "crawl_scope": "bounded",
+  "sitewide_max_urls": 20,
+  "render_js": true,
+  "trusted_render_target": true,
+  "fail_on_regression": false
+}
