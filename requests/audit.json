@@ -1,0 +1,31 @@
+{
+  "enabled": true,
+  "request_id": "byderma-postfix-http-retest-20261015",
+  "owner": "seo",
+  "project_id": "project-seo",
+  "for": "Verify current Byderma 2026-10-15 technical SEO status of indexability and XML sitemap transactional pages",
+  "task": "Bounded read-only HTTP-only independent SEO regression on eight exact live URLs",
+  "why": "Initial four-URL browser run yielded real crawl evidence but Lighthouse HTTP 403; independently recheck WooCommerce transactional URL status and SEO headers without browser CAPTCHA workarounds",
+  "trigger_when": "After first independently observed byderma.nl XML sitemap still lists cart/account/checkout despite HTML sitemap fixes",
+  "do_not_trigger_when": "Unauthorized host, robots-blocked URL, or any non-read-only site mutation",
+  "requested_by": "User owner of Byderma website authorized end-to-end SEO QA",
+  "source_context": {
+    "project_id": "project-seo",
+    "source_set_version": "2.6.33-compact-source-index-20261015"
+  },
+  "url": "https://byderma.nl/",
+  "urls": [
+    "https://byderma.nl/product/masque-nutri-apaisant/",
+    "https://byderma.nl/product-categorie/skincare/",
+    "https://byderma.nl/winkelwagen/",
+    "https://byderma.nl/mijn-account/",
+    "https://byderma.nl/checkout/",
+    "https://byderma.nl/afrekenen/",
+    "https://byderma.nl/product-categorie/make-up/ogen/"
+  ],
+  "crawl_scope": "bounded",
+  "sitewide_max_urls": 20,
+  "render_js": false,
+  "trusted_render_target": false,
+  "fail_on_regression": false
+}
