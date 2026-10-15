@@ -6,6 +6,16 @@
 
 SEO Checker turns public website targets into repeatable technical SEO evidence. Project SEO owns strategy and interpretation; this repository owns controlled technical observation, scope metadata and regression evidence. Ahrefs and GSC remain separate evidence sources.
 
+## Quick portfolio review
+
+**Problem:** Technical SEO findings are hard to compare when crawl scope, rendering and audit versions change between checks.
+
+**Approach:** This toolkit performs bounded public-URL checks and keeps crawlability, HTML validation, rendered observations and before/after comparisons as distinct evidence layers.
+
+**Inspect the work:** [Safe HTTP implementation](scripts/safe_http.py) · [Test suite](tests/) · [GitHub Actions workflows](.github/workflows/) · [Post-publication checks](scripts/verify_page_expectations.py).
+
+**Evidence boundary:** These checks support technical diagnosis; they do not establish higher rankings, traffic gains or a fully audited production website.
+
 ## Evidence chain
 
 `Ahrefs/GSC/SEO-selected scope -> SEO Checker -> normalized findings/relations -> fix -> compatible baseline comparison -> evidence manifest`
