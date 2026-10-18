@@ -10,7 +10,7 @@ from scripts import safe_http
 ROOT = Path(__file__).resolve().parents[1]
 PYTHON_ACTION = "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0"
 PYTHON_VERSION = "python-version: '3.14.7'"
-JAVA_ACTION = "actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1"
+JAVA_ACTION = "actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0"
 
 
 class ExhaustiveContractTests(unittest.TestCase):
