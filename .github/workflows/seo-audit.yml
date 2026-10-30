@@ -81,6 +81,9 @@ jobs:
       - name: Install locked Node tooling
         if: github.event_name != 'workflow_dispatch' || inputs.trusted_render_target == true
         run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Reject high-severity locked npm vulnerabilities
+        if: github.event_name != 'workflow_dispatch' || inputs.trusted_render_target == true
+        run: npm audit --audit-level=high --no-fund
       - name: Verify locked Lighthouse version
         if: github.event_name != 'workflow_dispatch' || inputs.trusted_render_target == true
         run: node -e "const p=require('./node_modules/@lhci/cli/package.json'); if(p.version!=='0.15.1') process.exit(1)"
