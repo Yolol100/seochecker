@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 from scripts import safe_http
 
 ROOT = Path(__file__).resolve().parents[1]
-PYTHON_ACTION = "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0"
+PYTHON_ACTION = "actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0"
 PYTHON_VERSION = "python-version: '3.14.7'"
 JAVA_ACTION = "actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0"
 
