@@ -12,6 +12,7 @@
   "overrides": {
     "body-parser": "1.20.9",
     "express": "4.22.3",
-    "qs": "6.17.1"
+    "qs": "6.17.1",
+    "ip-address": "10.7.5"
   }
 }
