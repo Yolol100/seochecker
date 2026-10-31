@@ -81,9 +81,30 @@ jobs:
       - name: Install locked Node tooling
         if: github.event_name != 'workflow_dispatch' || inputs.trusted_render_target == true
         run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Reject high-severity locked npm vulnerabilities
+        if: github.event_name != 'workflow_dispatch' || inputs.trusted_render_target == true
+        run: npm audit --audit-level=high --no-fund
       - name: Verify locked Lighthouse version
         if: github.event_name != 'workflow_dispatch' || inputs.trusted_render_target == true
-        run: node -e "const p=require('./node_modules/@lhci/cli/package.json'); if(p.version!=='0.15.1') process.exit(1)"
+        run: node -e "const p=require('./node_modules/lighthouse/package.json'); if(p.version!=='13.4.1') process.exit(1)"
+      - name: Prove three genuine Lighthouse reports against isolated fixture
+        if: github.event_name != 'workflow_dispatch' || inputs.trusted_render_target == true
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/lighthouse-fixture"
+          printf '%s\n' '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>SEO QA fixture</title></head><body><main><h1>Fixture page</h1><p>Local only.</p></main></body></html>' > "$RUNNER_TEMP/lighthouse-fixture/index.html"
+          python3 -m http.server 8765 --bind 127.0.0.1 --directory "$RUNNER_TEMP/lighthouse-fixture" > "$RUNNER_TEMP/lighthouse-http.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in 1 2 3 4 5; do
+            if curl -fsS 'http://127.0.0.1:8765/' >/dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS 'http://127.0.0.1:8765/' >/dev/null
+          bash scripts/run_lighthouse_three.sh 'http://127.0.0.1:8765/' "$RUNNER_TEMP/lighthouse-runs"
+          python3 scripts/lighthouse_summary.py --input-dir "$RUNNER_TEMP/lighthouse-runs" --output "$RUNNER_TEMP/lighthouse-summary.json"
+          python3 -c 'import json,os; data=json.load(open(os.path.join(os.environ["RUNNER_TEMP"],"lighthouse-summary.json"))); assert data["run_count"] == 3'
       - name: Test checker
         run: python3 -m unittest discover -s tests -v
       - name: Compile Python
@@ -283,7 +304,7 @@ jobs:
         id: lighthouse
         if: env.TRUSTED_RENDER_TARGET == 'true'
         continue-on-error: true
-        run: npx --no-install lhci collect --url="$TARGET_URL" --numberOfRuns=3
+        run: bash scripts/run_lighthouse_three.sh "$TARGET_URL" .lighthouseci
       - name: Normalize Lighthouse evidence
         id: lighthouse_summary
         if: steps.lighthouse.outcome == 'success'
