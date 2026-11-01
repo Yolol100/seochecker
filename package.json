@@ -7,6 +7,6 @@
     "node": ">=22.19.0"
   },
   "dependencies": {
-    "lighthouse": "13.4.1"
+    "lighthouse": "13.6.0"
   }
 }
