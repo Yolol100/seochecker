@@ -86,7 +86,7 @@ jobs:
         run: npm audit --audit-level=high --no-fund
       - name: Verify locked Lighthouse version
         if: github.event_name != 'workflow_dispatch' || inputs.trusted_render_target == true
-        run: node -e "const p=require('./node_modules/lighthouse/package.json'); if(p.version!=='13.4.1') process.exit(1)"
+        run: node -e "const declared=require('./package.json').dependencies.lighthouse; const locked=require('./package-lock.json').packages['node_modules/lighthouse'].version; const installed=require('./node_modules/lighthouse/package.json').version; if(declared!==locked || locked!==installed) { console.error('Lighthouse dependency and lockfile mismatch'); process.exit(1); }"
       - name: Prove three genuine Lighthouse reports against isolated fixture
         if: github.event_name != 'workflow_dispatch' || inputs.trusted_render_target == true
         shell: bash
