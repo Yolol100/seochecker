@@ -29,7 +29,11 @@ for path in files:
     if urlsplit(doc.get('requestedUrl', '')).hostname != target.hostname:
         raise SystemExit(f'Lighthouse host mismatch: {path.name}')
     versions.add(doc.get('lighthouseVersion'))
-if versions != {'13.4.1'}:
+# Both manifest and lockfile declare an exact version. Compare the real
+# Lighthouse evidence to that pin, not to a duplicated historical constant.
+declared = json.loads(Path('package.json').read_text(encoding='utf-8'))['dependencies']['lighthouse']
+locked = json.loads(Path('package-lock.json').read_text(encoding='utf-8'))['packages']['node_modules/lighthouse']['version']
+if not isinstance(declared, str) or declared != locked or versions != {locked}:
     raise SystemExit('Unexpected Lighthouse version across LHR reports')
-print('Three real Lighthouse 13.4.1 reports verified')
+print(f'Three real Lighthouse {locked} reports verified')
 PY
