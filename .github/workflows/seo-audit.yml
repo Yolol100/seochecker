@@ -84,6 +84,23 @@ jobs:
       - name: Reject high-severity locked npm vulnerabilities
         if: github.event_name != 'workflow_dispatch' || inputs.trusted_render_target == true
         run: npm audit --audit-level=high --no-fund
+      - name: Reject vulnerable Lighthouse dependency graph
+        if: github.event_name != 'workflow_dispatch' || inputs.trusted_render_target == true
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const pkg = require('./package.json');
+          const lock = require('./package-lock.json');
+          for (const [dep,version] of Object.entries({glob:'14.0.3',minimatch:'11.0.4'})) {
+            if (pkg.overrides?.[dep] !== version) throw Error('Missing secure override: ' + dep);
+            const nodes = Object.entries(lock.packages).filter(([path]) => path === 'node_modules/' + dep || path.endsWith('/node_modules/' + dep));
+            if (!nodes.length || nodes.some(([,value]) => value.version !== version)) throw Error('Vulnerable lockfile entry: ' + dep);
+            if (require('./node_modules/' + dep + '/package.json').version !== version) throw Error('Installed dependency differs: ' + dep);
+          }
+          console.log('Lighthouse transitive dependency pins validated');
+          NODE
+          npm ls glob minimatch lighthouse
       - name: Verify locked Lighthouse version
         if: github.event_name != 'workflow_dispatch' || inputs.trusted_render_target == true
         run: node -e "const declared=require('./package.json').dependencies.lighthouse; const locked=require('./package-lock.json').packages['node_modules/lighthouse'].version; const installed=require('./node_modules/lighthouse/package.json').version; if(declared!==locked || locked!==installed) { console.error('Lighthouse dependency and lockfile mismatch'); process.exit(1); }"
