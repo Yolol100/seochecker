@@ -55,7 +55,7 @@ Nu HTML Checker never fetches the target directly. `scripts/fetch_html_snapshot.
 
 ## Reproducible runtimes
 
-Python-using GitHub Actions jobs are explicitly pinned to Python 3.14.7 through an immutable `actions/setup-python` v7.0.0 commit. Node tooling is lockfile-installed and Lighthouse CI is fixed at 0.15.1. The Nu runtime uses Java 17 through immutable `actions/setup-java` v6.0.1. Checkout and upload actions are also pinned to immutable commit SHAs. Dependabot watches npm and GitHub Actions weekly.
+Python-using GitHub Actions jobs are explicitly pinned to Python 3.14.7 through an immutable `actions/setup-python` v7.0.0 commit. Node tooling is lockfile-installed and the existing three-run Lighthouse CLI is pinned to 13.6.0. The transitive `glob` and `minimatch` versions are pinned to security-fixed releases (14.0.3 and 11.0.4) and checked in CI; the historic `lighthouse-ci` toolkit identifier is retained for compatibility. The Nu runtime uses Java 17 through immutable `actions/setup-java` v6.0.1. Checkout and upload actions are also pinned to immutable commit SHAs. Dependabot watches npm and GitHub Actions weekly.
 
 ## Evidence manifest
 
