@@ -1,0 +1,23 @@
+{
+  "enabled": true,
+  "request_id": "egveranda_seo_20261106_01",
+  "owner": "seo",
+  "project_id": "project-seo",
+  "for": "EG Veranda staging technical SEO and crawlability audit",
+  "task": "Read-only bounded sitewide technical SEO evidence collection",
+  "why": "Compare live WordPress staging status with the EG Veranda r53 release baseline before any mutation.",
+  "trigger_when": "Explicit user authorized EG Veranda read-only audit",
+  "do_not_trigger_when": "No authenticated staging access or user does not authorize audit",
+  "requested_by": "webactueel-workflow",
+  "source_context": {
+    "project_id": "project-seo",
+    "source_set_version": "2.6.39-shared-media-bulk-import-20261030"
+  },
+  "url": "https://egveranda.concept-webactueel-4.com/",
+  "urls": [],
+  "crawl_scope": "sitewide",
+  "sitewide_max_urls": 125,
+  "render_js": false,
+  "trusted_render_target": true,
+  "fail_on_regression": false
+}
