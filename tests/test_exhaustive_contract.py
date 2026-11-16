@@ -10,7 +10,7 @@ from scripts import safe_http
 ROOT = Path(__file__).resolve().parents[1]
 PYTHON_ACTION = "actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0"
 PYTHON_VERSION = "python-version: '3.14.7'"
-JAVA_ACTION = "actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0"
+JAVA_ACTION_PATTERN = r"uses: actions/setup-java@([0-9a-f]{40}) # v(\d+\.\d+\.\d+)"
 
 
 class ExhaustiveContractTests(unittest.TestCase):
@@ -42,8 +42,12 @@ class ExhaustiveContractTests(unittest.TestCase):
         self.assertEqual(audit.count(PYTHON_VERSION), 3)
         self.assertEqual(toolkit.count(PYTHON_ACTION), 1)
         self.assertEqual(toolkit.count(PYTHON_VERSION), 1)
-        self.assertIn(JAVA_ACTION, audit)
-        self.assertNotIn("actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c", audit)
+        # Dependabot may upgrade the action; require an immutable full SHA and
+        # an explicit version annotation rather than hardcoding yesterday's SHA.
+        java_uses = re.findall(r"uses:\\s*actions/setup-java@[^\\s]+(?:\\s+#[^\\n]*)?", audit)
+        self.assertEqual(len(java_uses), 1, "SEO audit must use exactly one setup-java action")
+        self.assertRegex(java_uses[0], rf"^\\s*{JAVA_ACTION_PATTERN}$")
+        self.assertNotRegex(audit, r"uses:\\s*actions/setup-java@v[0-9]")
 
     def test_optional_lighthouse_setup_is_gated(self):
         workflow = (ROOT / ".github/workflows/seo-audit.yml").read_text(encoding="utf-8")
