@@ -44,10 +44,10 @@ class ExhaustiveContractTests(unittest.TestCase):
         self.assertEqual(toolkit.count(PYTHON_VERSION), 1)
         # Dependabot may upgrade the action; require an immutable full SHA and
         # an explicit version annotation rather than hardcoding yesterday's SHA.
-        java_uses = re.findall(r"uses:\\s*actions/setup-java@[^\\s]+(?:\\s+#[^\\n]*)?", audit)
+        java_uses = re.findall(r"uses:\s*actions/setup-java@[^\s]+(?:\s+#[^\n]*)?", audit)
         self.assertEqual(len(java_uses), 1, "SEO audit must use exactly one setup-java action")
-        self.assertRegex(java_uses[0], rf"^\\s*{JAVA_ACTION_PATTERN}$")
-        self.assertNotRegex(audit, r"uses:\\s*actions/setup-java@v[0-9]")
+        self.assertRegex(java_uses[0], rf"^\s*{JAVA_ACTION_PATTERN}$")
+        self.assertNotRegex(audit, r"uses:\s*actions/setup-java@v[0-9]")
 
     def test_optional_lighthouse_setup_is_gated(self):
         workflow = (ROOT / ".github/workflows/seo-audit.yml").read_text(encoding="utf-8")
