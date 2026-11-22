@@ -20,8 +20,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: private-technical-evidence-${{ github.repository }}-${{ github.run_id }}
+  group: private-technical-evidence-${{ github.repository }}
   cancel-in-progress: false
+  queue: max
 
 jobs:
   collect:
