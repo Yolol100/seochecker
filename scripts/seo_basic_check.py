@@ -86,15 +86,30 @@ def _meta_values(parser, key, value):
     return [m.get("content", "").strip() for m in parser.meta if m.get(key, "").lower() == value and m.get("content")]
 
 
-def _jsonld_types(value):
+PUBLIC_LOCAL_BUSINESS_KEYS = (
+    "name", "url", "address", "telephone", "openingHours",
+    "openingHoursSpecification", "sameAs", "potentialAction",
+)
+
+
+def _jsonld_types(value, localbusiness_fields=None):
+    """Collect schema types and optional public field presence in one bounded read.
+
+    Field presence is an unverified website claim, not a verified Business Profile.
+    No raw contact or address values are copied to the additional report field.
+    """
     found = set()
     if isinstance(value, dict):
         t = value.get("@type")
         if isinstance(t, str): found.add(t)
         elif isinstance(t, list): found.update(str(x) for x in t)
-        for child in value.values(): found.update(_jsonld_types(child))
+        if localbusiness_fields is not None and (
+            t == "LocalBusiness" or isinstance(t, list) and "LocalBusiness" in t
+        ):
+            localbusiness_fields.update(key for key in PUBLIC_LOCAL_BUSINESS_KEYS if value.get(key))
+        for child in value.values(): found.update(_jsonld_types(child, localbusiness_fields))
     elif isinstance(value, list):
-        for child in value: found.update(_jsonld_types(child))
+        for child in value: found.update(_jsonld_types(child, localbusiness_fields))
     return found
 
 
@@ -241,9 +256,9 @@ def analyze_html(html, base_url):
     hreflang = [{"lang": l.get("hreflang", "").strip().lower(), "url": urljoin(base_url, l.get("href", ""))} for l in parser.links if "alternate" in l.get("rel", "").lower().split() and l.get("hreflang") and l.get("href")]
     pagination_next = _rel_urls(parser, base_url, "next")
     pagination_prev = _rel_urls(parser, base_url, "prev")
-    jsonld_errors = []; jsonld_types = set()
+    jsonld_errors = []; jsonld_types = set(); jsonld_localbusiness_fields = set()
     for raw in parser.jsonld_raw:
-        try: jsonld_types.update(_jsonld_types(json.loads(raw)))
+        try: jsonld_types.update(_jsonld_types(json.loads(raw), jsonld_localbusiness_fields))
         except json.JSONDecodeError as exc: jsonld_errors.append(f"line {exc.lineno}, column {exc.colno}: {exc.msg}")
     directives = ",".join(robots + googlebot).lower(); blockers = []; warnings = []
     if re.search(r"(?:^|[,\s])noindex(?:$|[,\s])", directives): blockers.append("meta robots/googlebot bevat noindex")
@@ -262,7 +277,7 @@ def analyze_html(html, base_url):
     if duplicates: warnings.append("dubbele hreflang-taalcodes gevonden")
     if invalid: warnings.append("ongeldige of niet-herkende hreflang-taalcodes gevonden")
     if hreflang and not hreflang_self_reference: warnings.append("hreflang mist zelfverwijzing voor de huidige URL")
-    return {"title": title, "title_length": len(title), "meta_descriptions": descriptions, "meta_description_lengths": [len(value) for value in descriptions], "robots": robots, "googlebot": googlebot, "h1": parser.h1s, "h1_count": len(parser.h1s), "canonical": canonical, "canonical_self_referencing": len(canonical) == 1 and _normalize_url(canonical[0]) == _normalize_url(base_url), "hreflang": hreflang, "hreflang_duplicate_languages": duplicates, "hreflang_invalid_languages": invalid, "hreflang_self_reference": hreflang_self_reference, "pagination_next": pagination_next, "pagination_prev": pagination_prev, "jsonld_blocks": len(parser.jsonld_raw), "jsonld_types": sorted(jsonld_types), "jsonld_errors": jsonld_errors, "indexability_blockers": blockers, "warnings": warnings}
+    return {"title": title, "title_length": len(title), "meta_descriptions": descriptions, "meta_description_lengths": [len(value) for value in descriptions], "robots": robots, "googlebot": googlebot, "h1": parser.h1s, "h1_count": len(parser.h1s), "canonical": canonical, "canonical_self_referencing": len(canonical) == 1 and _normalize_url(canonical[0]) == _normalize_url(base_url), "hreflang": hreflang, "hreflang_duplicate_languages": duplicates, "hreflang_invalid_languages": invalid, "hreflang_self_reference": hreflang_self_reference, "pagination_next": pagination_next, "pagination_prev": pagination_prev, "jsonld_blocks": len(parser.jsonld_raw), "jsonld_types": sorted(jsonld_types), "jsonld_localbusiness_fields_present": sorted(jsonld_localbusiness_fields), "jsonld_errors": jsonld_errors, "indexability_blockers": blockers, "warnings": warnings}
 
 
 def fetch(url, timeout=20, *, max_bytes=8_000_000, allow_truncate=False, accept_encoding=None):
