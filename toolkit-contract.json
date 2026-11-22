@@ -23,7 +23,8 @@
     {"id":"safe-html-snapshot","version":"1","trigger_when":"every technical audit before local markup validation","outputs":["reports/target-snapshot.html","reports/target-snapshot.json"]},
     {"id":"nu-html-checker","version":"official-latest-digest-verified","trigger_when":"every technical audit; resolve the current official validator/validator latest vnu.jar and verify its GitHub release SHA-256 before local-only validation","outputs":["reports/vnu-tool-metadata.json","reports/w3c-nu.json"]},
     {"id":"evidence-manifest","version":"1.2","trigger_when":"every technical audit","outputs":["reports/evidence-manifest.json"]},
-    {"id":"page-expectations","version":"3","trigger_when":"explicit post-publication expectations are supplied","outputs":["caller-selected JSON report"]}
+    {"id":"page-expectations","version":"3","trigger_when":"explicit post-publication expectations are supplied","outputs":["caller-selected JSON report"]},
+    {"id":"private-owner-lead-batch","version":"1","trigger_when":"owner-only completed verified lead goal, called as pinned reusable workflow","outputs":["private Google Sheets OpportunityAudits and anonymous aggregate counts only"]}
   ],
   "input_contract": {
     "owner": "seo",
@@ -58,7 +59,8 @@
     {"tool":"safe-html-snapshot","path":".github/workflows/seo-audit.yml","contains":"fetch_html_snapshot.py"},
     {"tool":"nu-html-checker","path":".github/workflows/seo-audit.yml","contains":"vnu-tool-metadata.json"},
     {"tool":"evidence-manifest","path":"scripts/build_evidence_manifest.py","contains":"\"schema_version\": \"1.2\""},
-    {"tool":"page-expectations","path":"scripts/verify_page_expectations.py","contains":"fetch_text("}
+    {"tool":"page-expectations","path":"scripts/verify_page_expectations.py","contains":"fetch_text("},
+    {"tool":"private-owner-lead-batch","path":"scripts/lead_batch_technical.py","contains":"ahrefs_paid_api_units"}
   ],
   "boundaries": [
     "GSC remains authoritative for owned Google Search performance and Google's observed index status.",
@@ -86,6 +88,7 @@
     "External URL selection does not import external source semantics into repository output.",
     "Tool findings are diagnostics; SEO owns interpretation and prioritization.",
     "Client, target and run-specific truth belongs in runtime input or artifacts, not permanently on main.",
-    "Current Googlebot Search non-PDF fetch-prefix evidence is source-dated and bounded at 2,000,000 uncompressed response-body bytes when identity encoding is honored; the checker records that HTTP header bytes are not included and never presents this as a byte-for-byte Google crawler emulation."
+    "Current Googlebot Search non-PDF fetch-prefix evidence is source-dated and bounded at 2,000,000 uncompressed response-body bytes when identity encoding is honored; the checker records that HTTP header bytes are not included and never presents this as a byte-for-byte Google crawler emulation.",
+    "Private owner lead batch technical checks are optional, cost-free, limited to proven Leadscanner cohorts, and store all target evidence only in the private Google Sheet. No Ahrefs paid API calls, client URLs in public GitHub logs/artifacts, outreach or commercial conclusions; rendered UX and Google/review checks remain NOT_RUN until a dedicated specialist verifies them."
   ]
 }
