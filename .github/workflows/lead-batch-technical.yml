@@ -1,0 +1,66 @@
+name: Private owner lead batch technical evidence
+
+on:
+  workflow_call:
+    inputs:
+      lead_goal:
+        required: true
+        type: string
+      source_ref:
+        description: Immutable seochecker source commit matching the pinned workflow call
+        required: true
+        type: string
+    secrets:
+      GOOGLE_SERVICE_ACCOUNT_JSON:
+        required: true
+      LEAD_REGISTRY_SERVICE_ACCOUNT_JSON:
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: private-technical-evidence-${{ github.repository }}-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    if: >-
+      github.repository == 'Yolol100/Leadscanner' &&
+      github.event_name == 'issue_comment' &&
+      github.event.issue.number == 1720 &&
+      !github.event.issue.pull_request &&
+      github.event.comment.user.login == 'Yolol100' &&
+      startsWith(github.event.comment.body, 'LEADS_CHAT_V2:VERIFIED_GOAL_')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - name: Checkout the pinned SEO evidence implementation
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: Yolol100/seochecker
+          ref: ${{ inputs.source_ref }}
+          path: seochecker
+          persist-credentials: false
+      - name: Checkout the exact originating Leadscanner commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: Yolol100/Leadscanner
+          ref: ${{ github.sha }}
+          path: leadscanner
+          persist-credentials: false
+      - name: Setup Python runtime
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+        with:
+          python-version: '3.14.7'
+      - name: Install existing private-sheet authentication dependencies
+        run: python3 -m pip install -r leadscanner/requirements.txt
+      - name: Read back the exact verified batch; inspect only public URLs; save private facts
+        env:
+          PYTHONPATH: ${{ github.workspace }}/leadscanner/scripts:${{ github.workspace }}/seochecker/scripts
+          EXPECTED_LEAD_GOAL: ${{ inputs.lead_goal }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          LEAD_REGISTRY_SERVICE_ACCOUNT_JSON: ${{ secrets.LEAD_REGISTRY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          python3 -m py_compile seochecker/scripts/lead_batch_technical.py
+          python3 seochecker/scripts/lead_batch_technical.py
