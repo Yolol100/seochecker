@@ -44,4 +44,17 @@ class ResolveAuditRequestTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "Multiline"):
                     main()
             self.assertFalse(p.exists())
+    def test_cli_public_output_excludes_unrelated_environment(self):
+        with tempfile.TemporaryDirectory() as td:
+            p=Path(td)/"output.txt"
+            with patch.dict("os.environ", {"DISPATCH_URL":"https://example.com/?page=2", "DISPATCH_SOURCE_SET_VERSION":"2.6-test", "GITHUB_RUN_ID":"42", "UNRELATED_SECRET":"synthetic-only"}, clear=True), patch("sys.argv", ["resolve", "--event-name", "workflow_dispatch", "--output", str(p)]):
+                self.assertEqual(main(), 0)
+            output=p.read_text()
+            self.assertIn("target_url=https://example.com/?page=2", output)
+            self.assertIn("request_id=dispatch-42", output)
+            self.assertIn("source_set_version=2.6-test", output)
+            self.assertNotIn("synthetic-only", output)
+    def test_invalid_boolean_error_does_not_echo_input(self):
+        with self.assertRaisesRegex(ValueError, "^invalid boolean input$"):
+            resolve("workflow_dispatch", {"DISPATCH_URL":"https://example.com/", "DISPATCH_RENDER_JS":"synthetic-sensitive"}, "")
 if __name__ == "__main__": unittest.main()

@@ -12,12 +12,6 @@ from urllib.parse import parse_qsl, urlsplit, urlunsplit
 
 ID_RE = re.compile(r"^[A-Za-z0-9._-]{3,80}$")
 TEXT_FIELDS = ("for", "task", "why", "trigger_when", "do_not_trigger_when", "requested_by")
-DISPATCH_FIELDS = (
-    "DISPATCH_URL", "DISPATCH_URL_LIST", "DISPATCH_CRAWL_SCOPE",
-    "DISPATCH_SITEWIDE_MAX_URLS", "DISPATCH_RENDER_JS", "DISPATCH_TRUSTED_RENDER_TARGET",
-    "DISPATCH_BASELINE_RUN_ID", "DISPATCH_FAIL_ON_REGRESSION",
-    "DISPATCH_SOURCE_SET_VERSION", "GITHUB_RUN_ID",
-)
 # Public crawl targets must not carry authentication or signed-access parameters.
 CREDENTIAL_QUERY_KEYS = frozenset({
     "token", "accesstoken", "refreshtoken", "apikey", "key", "password",
@@ -51,7 +45,7 @@ def boolean(value, default=False) -> bool:
     text = str(value).strip().lower()
     if text in {"true", "1", "yes"}: return True
     if text in {"false", "0", "no"}: return False
-    raise ValueError(f"invalid boolean: {value}")
+    raise ValueError("invalid boolean input")
 
 
 def scope_value(value) -> str:
@@ -118,7 +112,20 @@ def resolve(event_name: str, env: dict[str, str], request_path: str) -> dict[str
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__); ap.add_argument("--event-name", required=True); ap.add_argument("--request", default="requests/audit.json"); ap.add_argument("--output", default=os.getenv("GITHUB_OUTPUT", "")); args = ap.parse_args()
-    dispatch_env = {key: os.getenv(key, "") for key in DISPATCH_FIELDS}
+    # The runner provides only these explicitly public workflow inputs.
+    # Never enumerate, dynamically look up, or forward unrelated environment variables.
+    dispatch_env = {
+        "DISPATCH_URL": os.getenv("DISPATCH_URL", ""),
+        "DISPATCH_URL_LIST": os.getenv("DISPATCH_URL_LIST", ""),
+        "DISPATCH_CRAWL_SCOPE": os.getenv("DISPATCH_CRAWL_SCOPE", ""),
+        "DISPATCH_SITEWIDE_MAX_URLS": os.getenv("DISPATCH_SITEWIDE_MAX_URLS", ""),
+        "DISPATCH_RENDER_JS": os.getenv("DISPATCH_RENDER_JS", ""),
+        "DISPATCH_TRUSTED_RENDER_TARGET": os.getenv("DISPATCH_TRUSTED_RENDER_TARGET", ""),
+        "DISPATCH_BASELINE_RUN_ID": os.getenv("DISPATCH_BASELINE_RUN_ID", ""),
+        "DISPATCH_FAIL_ON_REGRESSION": os.getenv("DISPATCH_FAIL_ON_REGRESSION", ""),
+        "DISPATCH_SOURCE_SET_VERSION": os.getenv("DISPATCH_SOURCE_SET_VERSION", ""),
+        "GITHUB_RUN_ID": os.getenv("GITHUB_RUN_ID", ""),
+    }
     result = resolve(args.event_name, dispatch_env, args.request)
     if any("\n" in value or "\r" in value for value in result.values()):
         raise ValueError("Multiline workflow outputs are forbidden")
