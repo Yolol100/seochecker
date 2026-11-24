@@ -8,19 +8,38 @@ import json
 import os
 import re
 from pathlib import Path
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import parse_qsl, urlsplit, urlunsplit
 
 ID_RE = re.compile(r"^[A-Za-z0-9._-]{3,80}$")
 TEXT_FIELDS = ("for", "task", "why", "trigger_when", "do_not_trigger_when", "requested_by")
+DISPATCH_FIELDS = (
+    "DISPATCH_URL", "DISPATCH_URL_LIST", "DISPATCH_CRAWL_SCOPE",
+    "DISPATCH_SITEWIDE_MAX_URLS", "DISPATCH_RENDER_JS", "DISPATCH_TRUSTED_RENDER_TARGET",
+    "DISPATCH_BASELINE_RUN_ID", "DISPATCH_FAIL_ON_REGRESSION",
+    "DISPATCH_SOURCE_SET_VERSION", "GITHUB_RUN_ID",
+)
+# Public crawl targets must not carry authentication or signed-access parameters.
+CREDENTIAL_QUERY_KEYS = frozenset({
+    "token", "accesstoken", "refreshtoken", "apikey", "key", "password",
+    "passwd", "secret", "clientsecret", "authorization", "auth", "jwt",
+    "signature", "sig", "session", "sessionid", "xamzsignature",
+    "xamzcredential", "xamzsecuritytoken", "xgoogsignature", "xgoogcredential",
+})
 
 
 def public_url(value: str) -> str:
     raw = str(value or "").strip()
+    if any(ord(c) < 32 or ord(c) == 127 for c in raw):
+        raise ValueError("URL contains control characters")
     p = urlsplit(raw)
     if p.scheme not in {"http", "https"} or not p.hostname:
         raise ValueError("URL must be HTTP(S)")
     if p.username or p.password:
         raise ValueError("URL credentials are forbidden")
+    for key, _ in parse_qsl(p.query, keep_blank_values=True):
+        normalized = re.sub(r"[^a-z0-9]", "", key.lower())
+        if normalized in CREDENTIAL_QUERY_KEYS:
+            raise ValueError("Credential-like URL query parameters are forbidden")
     return urlunsplit((p.scheme, p.netloc, p.path or "/", p.query, ""))
 
 
@@ -99,8 +118,14 @@ def resolve(event_name: str, env: dict[str, str], request_path: str) -> dict[str
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__); ap.add_argument("--event-name", required=True); ap.add_argument("--request", default="requests/audit.json"); ap.add_argument("--output", default=os.getenv("GITHUB_OUTPUT", "")); args = ap.parse_args()
-    result = resolve(args.event_name, dict(os.environ), args.request)
-    if not args.output: print(json.dumps(result, indent=2)); return 0
+    dispatch_env = {key: os.getenv(key, "") for key in DISPATCH_FIELDS}
+    result = resolve(args.event_name, dispatch_env, args.request)
+    if any("\n" in value or "\r" in value for value in result.values()):
+        raise ValueError("Multiline workflow outputs are forbidden")
+    if not args.output:
+        print(json.dumps({"run": result["run"], "crawl_scope": result["crawl_scope"]}, indent=2))
+        return 0
+    # GITHUB_OUTPUT is an intentional handoff of validated public URL inputs, not secrets.
     with open(args.output, "a", encoding="utf-8") as handle:
         for key, value in result.items(): handle.write(f"{key}={value}\n")
     return 0
